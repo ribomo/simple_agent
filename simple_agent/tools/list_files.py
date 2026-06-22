@@ -4,7 +4,8 @@ from pathlib import Path
 
 from simple_agent.tools.definitions import LIST_FILES_DEFINITION
 from simple_agent.tools.base_tool import BaseTool
-from simple_agent.tools.utils import ToolError, error, get_workspace_path, is_sensitive_path, ok
+from simple_agent.tools.permissions.file_permission import FilePermissionError, WorkspacePermission
+from simple_agent.tools.utils import error, ok
 
 
 class ListFilesTool(BaseTool):
@@ -16,8 +17,9 @@ class ListFilesTool(BaseTool):
     def run(self, root: Path, arguments: dict[str, object]) -> str:
         path = arguments.get("path", ".")
         try:
-            workspace_path = get_workspace_path(root, path)
-        except ToolError as exc:
+            permissions = WorkspacePermission(root)
+            workspace_path = permissions.require_access(path)
+        except FilePermissionError as exc:
             return error(str(exc))
 
         if not workspace_path.is_dir():
@@ -25,9 +27,10 @@ class ListFilesTool(BaseTool):
 
         entries = []
         for child in sorted(workspace_path.iterdir()):
-            if is_sensitive_path(child.relative_to(root)):
+            relative_path = child.relative_to(permissions.workspace)
+            if permissions.is_sensitive_path(relative_path):
                 continue
             suffix = "/" if child.is_dir() else ""
-            entries.append(f"{child.relative_to(root)}{suffix}")
+            entries.append(f"{relative_path}{suffix}")
 
-        return ok({"path": str(workspace_path.relative_to(root)), "entries": entries})
+        return ok({"path": permissions.relative_to_workspace(workspace_path), "entries": entries})

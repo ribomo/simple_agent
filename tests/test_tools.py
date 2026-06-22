@@ -43,6 +43,46 @@ class ToolsTest(unittest.TestCase):
             self.assertFalse(result["ok"])
             self.assertIn("outside workspace", result["error"])
 
+    def test_absolute_paths_must_stay_inside_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            inside = root / "notes.txt"
+            inside.write_text("inside", encoding="utf-8")
+            tools = Tools(root=root)
+
+            inside_result = json.loads(tools.run("read_file", {"path": str(inside)}))
+            outside_result = json.loads(tools.run("read_file", {"path": "/tmp/outside.txt"}))
+
+            self.assertTrue(inside_result["ok"])
+            self.assertEqual(inside_result["content"], "inside")
+            self.assertFalse(outside_result["ok"])
+            self.assertIn("outside workspace", outside_result["error"])
+
+    def test_symlink_targets_outside_workspace_are_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            outside = root.parent / "outside-permission-target.txt"
+            outside.write_text("secret", encoding="utf-8")
+            (root / "link.txt").symlink_to(outside)
+            tools = Tools(root=root)
+
+            try:
+                result = json.loads(tools.run("read_file", {"path": "link.txt"}))
+            finally:
+                outside.unlink(missing_ok=True)
+
+            self.assertFalse(result["ok"])
+            self.assertIn("outside workspace", result["error"])
+
+    def test_list_files_rejects_invalid_path_argument(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tools = Tools(root=temp_dir)
+
+            result = json.loads(tools.run("list_files", {"path": 123}))
+
+            self.assertFalse(result["ok"])
+            self.assertIn("path must be a string", result["error"])
+
     def test_sensitive_paths_are_blocked(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

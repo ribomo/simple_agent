@@ -4,7 +4,8 @@ from pathlib import Path
 
 from simple_agent.tools.definitions import EDIT_FILE_DEFINITION
 from simple_agent.tools.base_tool import BaseTool
-from simple_agent.tools.utils import ToolError, error, get_workspace_path, ok
+from simple_agent.tools.permissions.file_permission import FilePermissionError, WorkspacePermission
+from simple_agent.tools.utils import error, ok
 
 
 class EditFileTool(BaseTool):
@@ -25,8 +26,9 @@ class EditFileTool(BaseTool):
             return error("new_string is required")
 
         try:
-            workspace_path = get_workspace_path(root, path)
-        except ToolError as exc:
+            permissions = WorkspacePermission(root)
+            workspace_path = permissions.require_access(path)
+        except FilePermissionError as exc:
             return error(str(exc))
 
         if not workspace_path.is_file():
@@ -51,6 +53,6 @@ class EditFileTool(BaseTool):
             return error(f"could not write file: {exc}")
 
         return ok({
-            "path": str(workspace_path.relative_to(root)),
+            "path": permissions.relative_to_workspace(workspace_path),
             "replaced": True,
         })

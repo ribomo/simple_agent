@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,7 @@ from simple_agent.tools.read_file import ReadFileTool
 from simple_agent.tools.search_text import SearchTextTool
 from simple_agent.tools.write_file import WriteFileTool
 from simple_agent.tools.edit_file import EditFileTool
+from simple_agent.tools.run_command import RunCommandTool
 from simple_agent.tools.tools import Tools
 
 
@@ -143,11 +145,143 @@ class ToolsTest(unittest.TestCase):
         tools = Tools()
 
         definitions = tools.definitions()
+        run_command_definition = definitions[-1]["function"]
 
         self.assertEqual(
             [definition["function"]["name"] for definition in definitions],
-            ["list_files", "read_file", "search_text", "write_file", "edit_file"],
+            ["list_files", "read_file", "search_text", "write_file", "edit_file", "run_command"],
         )
+        self.assertIn("Allowed commands", run_command_definition["description"])
+        self.assertIn("git status", run_command_definition["description"])
+
+    def test_run_command_runs_allowed_command_in_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            tools = Tools(root=root)
+
+            result = json.loads(tools.run("run_command", {"command": "pwd"}))
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["stdout"].strip(), str(root))
+            self.assertEqual(result["stderr"], "")
+            self.assertFalse(result["timed_out"])
+
+    def test_run_command_reports_nonzero_exit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool = RunCommandTool()
+
+            result = json.loads(tool.run(Path(temp_dir), {"command": "ls missing-file"}))
+
+            self.assertFalse(result["ok"])
+            self.assertNotEqual(result["exit_code"], 0)
+            self.assertFalse(result["timed_out"])
+
+    def test_run_command_rejects_invalid_command_argument(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool = RunCommandTool()
+
+            result = json.loads(tool.run(Path(temp_dir), {"command": ""}))
+
+            self.assertFalse(result["ok"])
+            self.assertIn("command is required", result["error"])
+
+    def test_run_command_rejects_disallowed_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool = RunCommandTool()
+
+            python_result = json.loads(tool.run(Path(temp_dir), {"command": "python --version"}))
+            rm_result = json.loads(tool.run(Path(temp_dir), {"command": "rm file.txt"}))
+            touch_result = json.loads(tool.run(Path(temp_dir), {"command": "touch file.txt"}))
+
+            self.assertFalse(python_result["ok"])
+            self.assertIn("command is not allowed: python", python_result["error"])
+            self.assertFalse(rm_result["ok"])
+            self.assertIn("command is not allowed: rm", rm_result["error"])
+            self.assertFalse(touch_result["ok"])
+            self.assertIn("command is not allowed: touch", touch_result["error"])
+
+    def test_run_command_rejects_shell_operators(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool = RunCommandTool()
+
+            pipe_result = json.loads(tool.run(Path(temp_dir), {"command": "ls | cat"}))
+            redirect_result = json.loads(tool.run(Path(temp_dir), {"command": "ls > out.txt"}))
+            chain_result = json.loads(tool.run(Path(temp_dir), {"command": "pwd && ls"}))
+
+            self.assertFalse(pipe_result["ok"])
+            self.assertIn("shell syntax is not allowed", pipe_result["error"])
+            self.assertFalse(redirect_result["ok"])
+            self.assertIn("shell syntax is not allowed", redirect_result["error"])
+            self.assertFalse(chain_result["ok"])
+            self.assertIn("shell syntax is not allowed", chain_result["error"])
+
+    def test_run_command_rejects_mutating_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / "victim.txt"
+            target.write_text("keep", encoding="utf-8")
+            tool = RunCommandTool()
+
+            result = json.loads(tool.run(root, {"command": "find . -name victim.txt -delete"}))
+
+            self.assertFalse(result["ok"])
+            self.assertIn("command flag is not allowed: -delete", result["error"])
+            self.assertTrue(target.exists())
+
+    def test_run_command_rejects_path_arguments_outside_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            outside = root.parent / "outside-command-target.txt"
+            outside.write_text("secret", encoding="utf-8")
+            (root / "link.txt").symlink_to(outside)
+            tool = RunCommandTool()
+
+            try:
+                absolute_result = json.loads(tool.run(root, {"command": f"cat {outside}"}))
+                symlink_result = json.loads(tool.run(root, {"command": "cat link.txt"}))
+            finally:
+                outside.unlink(missing_ok=True)
+
+            self.assertFalse(absolute_result["ok"])
+            self.assertIn("outside workspace", absolute_result["error"])
+            self.assertFalse(symlink_result["ok"])
+            self.assertIn("outside workspace", symlink_result["error"])
+
+    def test_run_command_allows_read_only_git_subcommands(self) -> None:
+        tool = RunCommandTool()
+
+        status_result = json.loads(tool.run(Path.cwd(), {"command": "git status --short"}))
+        commit_result = json.loads(tool.run(Path.cwd(), {"command": "git commit --allow-empty -m test"}))
+
+        self.assertIn("exit_code", status_result)
+        self.assertFalse(status_result["timed_out"])
+        self.assertFalse(commit_result["ok"])
+        self.assertIn("git subcommand is not allowed: commit", commit_result["error"])
+
+    def test_run_command_times_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fifo_path = Path(temp_dir) / "stream"
+            os.mkfifo(fifo_path)
+            tool = RunCommandTool(timeout_seconds=0.001)
+
+            result = json.loads(tool.run(Path(temp_dir), {"command": "cat stream"}))
+
+            self.assertFalse(result["ok"])
+            self.assertIsNone(result["exit_code"])
+            self.assertTrue(result["timed_out"])
+
+    def test_run_command_truncates_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "long.txt").write_text("abcdef", encoding="utf-8")
+            tool = RunCommandTool(max_output_chars=3)
+
+            result = json.loads(tool.run(root, {"command": "cat long.txt"}))
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["stdout"], "abc")
+            self.assertTrue(result["truncated"])
 
     def test_write_file_creates_new_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

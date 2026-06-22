@@ -11,6 +11,16 @@ from simple_agent.llm_client import (
 from simple_agent.streaming import TextDelta, ToolResult
 
 
+def approve_run_command(command: str) -> bool:
+    while True:
+        answer = input(f"\nApprove command `{command}`? [y/N] ").strip().lower()
+        if answer in {"y", "yes"}:
+            return True
+        if answer in {"", "n", "no"}:
+            return False
+        print("Please answer y or n.")
+
+
 def main() -> None:
     load_dotenv()
 
@@ -34,7 +44,11 @@ def main() -> None:
         timeout=timeout,
     )
     model = os.environ.get("LLM_MODEL", default_model)
-    agent = SimpleAgent(llm_client=llm_client, model=model)
+    agent = SimpleAgent(
+        llm_client=llm_client,
+        model=model,
+        command_approver=approve_run_command,
+    )
 
     print("Simple agent client. Type 'exit' to quit.")
 

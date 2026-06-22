@@ -205,6 +205,102 @@ class SimpleAgentTest(unittest.TestCase):
         self.assertFalse(tool_result["ok"])
         self.assertIn("invalid JSON arguments", tool_result["error"])
 
+    def test_run_command_without_approver_returns_tool_error(self) -> None:
+        llm_client = FakeLLMClient(
+            [
+                stream_response_with_tool_calls([
+                    [
+                        tool_call_delta(
+                            index=0,
+                            call_id="call_1",
+                            name="run_command",
+                            arguments='{"command": "pwd"}',
+                            call_type="function",
+                        )
+                    ]
+                ]),
+                stream_response(["I will not run it."]),
+            ]
+        )
+        agent = SimpleAgent(llm_client=llm_client, model="test-model")
+
+        events = list(agent.respond_stream("Run pwd"))
+
+        self.assertIsInstance(events[0], ToolResult)
+        self.assertFalse(events[0].ok)
+        self.assertEqual(events[1], TextDelta("I will not run it."))
+        tool_result = json.loads(agent.conversation_history[3]["content"])
+        self.assertFalse(tool_result["ok"])
+        self.assertIn("not approved", tool_result["error"])
+
+    def test_run_command_denial_returns_tool_error(self) -> None:
+        approvals = []
+        llm_client = FakeLLMClient(
+            [
+                stream_response_with_tool_calls([
+                    [
+                        tool_call_delta(
+                            index=0,
+                            call_id="call_1",
+                            name="run_command",
+                            arguments='{"command": "pwd"}',
+                            call_type="function",
+                        )
+                    ]
+                ]),
+                stream_response(["Okay, I will not run it."]),
+            ]
+        )
+        agent = SimpleAgent(
+            llm_client=llm_client,
+            model="test-model",
+            command_approver=lambda command: approvals.append(command) or False,
+        )
+
+        events = list(agent.respond_stream("Run pwd"))
+
+        self.assertEqual(approvals, ["pwd"])
+        self.assertIsInstance(events[0], ToolResult)
+        self.assertFalse(events[0].ok)
+        tool_result = json.loads(agent.conversation_history[3]["content"])
+        self.assertFalse(tool_result["ok"])
+        self.assertIn("not approved", tool_result["error"])
+
+    def test_run_command_approval_runs_tool(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            approvals = []
+            llm_client = FakeLLMClient(
+                [
+                    stream_response_with_tool_calls([
+                        [
+                            tool_call_delta(
+                                index=0,
+                                call_id="call_1",
+                                name="run_command",
+                                arguments='{"command": "pwd"}',
+                                call_type="function",
+                            )
+                        ]
+                    ]),
+                    stream_response(["The command ran."]),
+                ]
+            )
+            agent = SimpleAgent(
+                llm_client=llm_client,
+                model="test-model",
+                workspace=temp_dir,
+                command_approver=lambda command: approvals.append(command) or True,
+            )
+
+            events = list(agent.respond_stream("Run pwd"))
+
+        self.assertEqual(approvals, ["pwd"])
+        self.assertIsInstance(events[0], ToolResult)
+        self.assertTrue(events[0].ok)
+        tool_result = json.loads(agent.conversation_history[3]["content"])
+        self.assertTrue(tool_result["ok"])
+        self.assertEqual(tool_result["stdout"].strip(), temp_dir)
+
     def test_interleaved_tool_calls_are_ordered_by_index(self) -> None:
         llm_client = FakeLLMClient(
             [

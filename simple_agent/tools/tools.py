@@ -9,6 +9,7 @@ from simple_agent.tools.read_file import ReadFileTool
 from simple_agent.tools.search_text import SearchTextTool
 from simple_agent.tools.write_file import WriteFileTool
 from simple_agent.tools.edit_file import EditFileTool
+from simple_agent.tools.run_command import RunCommandTool
 
 
 class Tools:
@@ -31,6 +32,7 @@ class Tools:
                 SearchTextTool(max_results=self.max_search_results),
                 WriteFileTool(),
                 EditFileTool(),
+                RunCommandTool(),
             ]
         }
 

@@ -44,6 +44,9 @@ class WorkspacePermission:
         self._check_exists(absolute_path, path, must_exist=must_exist)
         return absolute_path
 
+    def contains_path(self, path: Path) -> bool:
+        return path == self.workspace or self.workspace in path.parents
+
     def get_files_under_path(self, path: Path) -> list[Path]:
         if path.is_file():
             return [path]
@@ -67,7 +70,7 @@ class WorkspacePermission:
         return files
 
     def _check_inside_workspace(self, absolute_path: Path, original_path: str | Path) -> None:
-        if absolute_path != self.workspace and self.workspace not in absolute_path.parents:
+        if not self.contains_path(absolute_path):
             raise FilePermissionError(f"path is outside workspace: {original_path}")
 
     def _check_not_sensitive(self, absolute_path: Path, original_path: str | Path) -> None:

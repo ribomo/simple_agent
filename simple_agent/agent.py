@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 import json
-from typing import Any, Generator
+from typing import Any, Callable, Generator
 
 from simple_agent.prompt import INITIAL_PROMPT
 from simple_agent.streaming import (
@@ -24,10 +24,12 @@ class SimpleAgent:
         model: str,
         workspace: str = ".",
         max_turns: int = 5,
+        command_approver: Callable[[str], bool] | None = None,
     ) -> None:
         self.llm_client = llm_client
         self.model = model
         self.max_turns = max_turns
+        self.command_approver = command_approver
         self.tools = Tools(workspace)
         self.conversation_history: list[dict[str, Any]] = [
             {"role": "system", "content": INITIAL_PROMPT},
@@ -82,7 +84,20 @@ class SimpleAgent:
             arguments = self._parse_tool_arguments(tool_call["function"]["arguments"])
         except ValueError as exc:
             return error(str(exc))
+        user_approval = self._approve_run_command(arguments)
+        if name == "run_command" and not user_approval:
+            return error("run_command was not approved")
         return self.tools.run(name, arguments)
+
+    def _approve_run_command(self, arguments: dict[str, object]) -> bool:
+        command = arguments.get("command")
+        if not isinstance(command, str) or not command.strip():
+            # Empty or invalid commands are blocked
+            return True
+        if self.command_approver is None:
+            # The approval function is missing, so do not run the command.
+            return False
+        return self.command_approver(command)
 
     def _tool_result_ok(self, result: str) -> bool:
         try:

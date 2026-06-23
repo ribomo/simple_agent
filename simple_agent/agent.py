@@ -4,11 +4,12 @@ from collections.abc import Iterable
 import json
 from typing import Any, Callable, Generator
 
+from simple_agent.conversation_history import ConversationHistory
+from simple_agent.message_types import ToolCallDict
 from simple_agent.prompt import INITIAL_PROMPT
 from simple_agent.streaming import (
     ChatCompletionStreamAccumulator,
     TextDelta,
-    ToolCallDict,
     ToolResult,
 )
 from simple_agent.tools.tools import Tools
@@ -31,12 +32,10 @@ class SimpleAgent:
         self.max_turns = max_turns
         self.command_approver = command_approver
         self.tools = Tools(workspace)
-        self.conversation_history: list[dict[str, Any]] = [
-            {"role": "system", "content": INITIAL_PROMPT},
-        ]
+        self.conversation_history = ConversationHistory(INITIAL_PROMPT)
 
     def respond_stream(self, user_input: str) -> Generator[TextDelta | ToolResult, None, None]:
-        self.conversation_history.append({"role": "user", "content": user_input})
+        self.conversation_history.append_user(user_input)
 
         for _ in range(self.max_turns):
             accumulator = ChatCompletionStreamAccumulator()
@@ -53,11 +52,7 @@ class SimpleAgent:
 
             for tool_call_dict in tool_calls:
                 result = self._handle_tool_call(tool_call_dict)
-                self.conversation_history.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call_dict["id"],
-                    "content": result,
-                })
+                self.conversation_history.append_tool(tool_call_dict["id"], result)
                 yield ToolResult(
                     call_id=tool_call_dict["id"],
                     name=tool_call_dict["function"]["name"],
@@ -66,13 +61,13 @@ class SimpleAgent:
                 )
 
         final_text = "I stopped because the tool loop reached the max turn limit."
-        self.conversation_history.append({"role": "assistant", "content": final_text})
+        self.conversation_history.append_assistant(final_text)
         yield TextDelta(final_text)
 
     def _create_llm_stream(self) -> Iterable[Any]:
         return self.llm_client.chat.completions.create(
             model=self.model,
-            messages=self.conversation_history,
+            messages=self.conversation_history.to_messages(),
             tools=self.tools.definitions(),
             tool_choice="auto",
             stream=True,

@@ -1,29 +1,13 @@
 """Helpers for Chat Completions streaming responses."""
 
 from dataclasses import dataclass
-from typing import Literal, NotRequired, TypedDict
 
 from openai.types.chat.chat_completion_chunk import (
     ChatCompletionChunk,
     ChoiceDeltaToolCall,
 )
 
-
-class FunctionCallDict(TypedDict):
-    name: str
-    arguments: str
-
-
-class ToolCallDict(TypedDict):
-    id: str
-    type: Literal["function"]
-    function: FunctionCallDict
-
-
-class AssistantMessageDict(TypedDict):
-    role: Literal["assistant"]
-    content: str | None
-    tool_calls: NotRequired[list[ToolCallDict]]
+from simple_agent.message_types import AssistantMessageDict, ToolCallDict
 
 
 @dataclass

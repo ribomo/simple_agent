@@ -48,5 +48,5 @@ You can still set `LLM_BASE_URL` when you want to override the provider default,
 ## Run
 
 ```bash
-uv run python main.py
+uv run simple-agent
 ```

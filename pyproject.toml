@@ -9,5 +9,8 @@ dependencies = [
     "python-dotenv>=1.2.2",
 ]
 
+[project.scripts]
+simple-agent = "simple_agent.cli:main"
+
 [tool.uv]
 package = false

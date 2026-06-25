@@ -16,7 +16,15 @@ Interactive terminal
 
 ## Install
 
-This project uses `uv` to track the Python environment.
+Plain Agent is available on PyPI and can be installed with `pipx`:
+
+```bash
+pipx install plain-agent
+```
+
+If `pipx` is not installed, follow the [official installation guide](https://pipx.pypa.io/stable/how-to/install-pipx/).
+
+For local development, this project uses `uv` to track the Python environment.
 If `uv` is not installed, follow the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash

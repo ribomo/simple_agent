@@ -50,3 +50,11 @@ You can still set `LLM_BASE_URL` when you want to override the provider default,
 ```bash
 uv run plain-agent
 ```
+
+## Test
+
+Run the test suite with the standard library test runner:
+
+```bash
+uv run python -m unittest discover
+```

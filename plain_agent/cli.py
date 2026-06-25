@@ -3,6 +3,10 @@ import os
 from dotenv import load_dotenv
 
 from plain_agent.agent_loop import SimpleAgent
+from plain_agent.compaction import (
+    CompactionConfig,
+    ConversationCompactor,
+)
 from plain_agent.llm_client import (
     DEEPSEEK_BASE_URL,
     OPENAI_BASE_URL,
@@ -34,10 +38,31 @@ def main() -> None:
         timeout=timeout,
     )
     model = os.environ.get("LLM_MODEL", default_model)
+    compactor = ConversationCompactor(
+        llm_client=llm_client,
+        model=model,
+        config=CompactionConfig(
+            keep_recent_exchanges=_env_int(
+                os.environ.get("LLM_COMPACTION_KEEP_RECENT_EXCHANGES"),
+                2,
+            ),
+            model=os.environ.get("LLM_COMPACTION_MODEL"),
+        ),
+    )
     agent = SimpleAgent(
         llm_client=llm_client,
         model=model,
         command_approver=approve_run_command,
+        compactor=compactor,
     )
 
     run_interactive_terminal(agent)
+
+
+def _env_int(value: str | None, default: int) -> int:
+    if value is None:
+        return default
+    parsed = int(value)
+    if parsed < 0:
+        raise ValueError("integer environment settings must be non-negative")
+    return parsed

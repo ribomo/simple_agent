@@ -9,8 +9,10 @@ from plain_agent.terminal_loop import approve_run_command, run_interactive_termi
 
 
 class FakeAgent:
-    def __init__(self) -> None:
+    def __init__(self, compact_result: bool = False) -> None:
         self.prompts = []
+        self.compact_result = compact_result
+        self.compact_calls = 0
 
     def respond_stream(self, user_input: str):
         self.prompts.append(user_input)
@@ -26,6 +28,10 @@ class FakeAgent:
 
     def context_size(self) -> ContextSize:
         return ContextSize(message_count=4, char_count=84, byte_count=84)
+
+    def compact_history(self) -> bool:
+        self.compact_calls += 1
+        return self.compact_result
 
 
 class TerminalLoopTest(unittest.TestCase):
@@ -45,6 +51,31 @@ class TerminalLoopTest(unittest.TestCase):
             output.getvalue(),
         )
         self.assertIn("[conversation history: 4 messages, 84 chars, 84 bytes]\n\n", output.getvalue())
+
+    def test_run_interactive_terminal_compacts_on_command(self) -> None:
+        agent = FakeAgent(compact_result=True)
+        output = StringIO()
+
+        with patch("builtins.input", side_effect=["/compact", "exit"]):
+            with redirect_stdout(output):
+                run_interactive_terminal(agent)
+
+        self.assertEqual(agent.prompts, [])
+        self.assertEqual(agent.compact_calls, 1)
+        self.assertIn("[conversation compacted]\n", output.getvalue())
+        self.assertIn("[conversation history: 4 messages, 84 chars, 84 bytes]\n\n", output.getvalue())
+
+    def test_run_interactive_terminal_reports_when_compact_has_nothing_to_do(self) -> None:
+        agent = FakeAgent(compact_result=False)
+        output = StringIO()
+
+        with patch("builtins.input", side_effect=["/compact", "exit"]):
+            with redirect_stdout(output):
+                run_interactive_terminal(agent)
+
+        self.assertEqual(agent.prompts, [])
+        self.assertEqual(agent.compact_calls, 1)
+        self.assertIn("[conversation compact: nothing to compact]\n\n", output.getvalue())
 
     def test_run_interactive_terminal_handles_eof(self) -> None:
         output = StringIO()

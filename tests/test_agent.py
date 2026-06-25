@@ -78,6 +78,15 @@ class FakeLLMClient:
         self.chat = SimpleNamespace(completions=FakeCompletions(responses))
 
 
+class FakeCompactor:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def compact(self, history):
+        self.calls.append(history.to_messages())
+        return True
+
+
 class SimpleAgentTest(unittest.TestCase):
     def test_respond_stream_yields_text_deltas(self) -> None:
         llm_client = FakeLLMClient([[
@@ -95,6 +104,39 @@ class SimpleAgentTest(unittest.TestCase):
         self.assertIn("tools", llm_client.chat.completions.calls[0])
         self.assertEqual([item["role"] for item in agent.conversation_history], ["system", "user", "assistant"])
         self.assertEqual(agent.conversation_history[-1]["content"], "Hello there")
+
+    def test_respond_stream_does_not_auto_compact_history(self) -> None:
+        llm_client = FakeLLMClient([stream_response(["Hello"])])
+        compactor = FakeCompactor()
+        agent = SimpleAgent(
+            llm_client=llm_client,
+            model="test-model",
+            compactor=compactor,
+        )
+
+        list(agent.respond_stream("Hi"))
+
+        self.assertEqual(compactor.calls, [])
+
+    def test_compact_history_uses_compactor_with_completed_history(self) -> None:
+        llm_client = FakeLLMClient([stream_response(["Hello"])])
+        compactor = FakeCompactor()
+        agent = SimpleAgent(
+            llm_client=llm_client,
+            model="test-model",
+            compactor=compactor,
+        )
+
+        list(agent.respond_stream("Hi"))
+        compacted = agent.compact_history()
+
+        self.assertTrue(compacted)
+        self.assertEqual(len(compactor.calls), 1)
+        self.assertEqual(
+            [message["role"] for message in compactor.calls[0]],
+            ["system", "user", "assistant"],
+        )
+        self.assertEqual(compactor.calls[0][-1]["content"], "Hello")
 
     def test_context_size_reports_completed_conversation_history(self) -> None:
         llm_client = FakeLLMClient([stream_response(["Hello"])])

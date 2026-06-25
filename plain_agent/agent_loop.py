@@ -4,6 +4,7 @@ from collections.abc import Iterable
 import json
 from typing import Any, Callable, Generator
 
+from plain_agent.compaction import ConversationCompactor
 from plain_agent.conversation_history import ContextSize, ConversationHistory
 from plain_agent.message_types import ToolCallDict
 from plain_agent.prompt import INITIAL_PROMPT
@@ -26,11 +27,13 @@ class SimpleAgent:
         workspace: str = ".",
         max_turns: int = 5,
         command_approver: Callable[[str], bool] | None = None,
+        compactor: ConversationCompactor | None = None,
     ) -> None:
         self.llm_client = llm_client
         self.model = model
         self.max_turns = max_turns
         self.command_approver = command_approver
+        self.compactor = compactor
         self.tools = Tools(workspace)
         self.conversation_history = ConversationHistory(INITIAL_PROMPT)
 
@@ -66,6 +69,11 @@ class SimpleAgent:
 
     def context_size(self) -> ContextSize:
         return self.conversation_history.context_size()
+
+    def compact_history(self) -> bool:
+        if self.compactor is None:
+            return False
+        return self.compactor.compact(self.conversation_history)
 
     def _create_llm_stream(self) -> Iterable[Any]:
         return self.llm_client.chat.completions.create(

@@ -30,6 +30,14 @@ def run_interactive_terminal(agent: SimpleAgent) -> None:
             break
         if not user_input:
             continue
+        if user_input == "/compact":
+            if agent.compact_history():
+                print("[conversation compacted]")
+                _print_context_size(agent)
+            else:
+                print("[conversation compact: nothing to compact]")
+            print()
+            continue
 
         for event in agent.respond_stream(user_input):
             if isinstance(event, TextDelta):
@@ -38,9 +46,14 @@ def run_interactive_terminal(agent: SimpleAgent) -> None:
                 status = "ok" if event.ok else "error"
                 print(f"\n[tool {event.name}: {status}]")
 
-        size = agent.context_size()
-        print(
-            f"\n[conversation history: {size.message_count} messages, "
-            f"{size.char_count} chars, {size.byte_count} bytes]"
-        )
         print()
+        _print_context_size(agent)
+        print()
+
+
+def _print_context_size(agent: SimpleAgent) -> None:
+    size = agent.context_size()
+    print(
+        f"[conversation history: {size.message_count} messages, "
+        f"{size.char_count} chars, {size.byte_count} bytes]"
+    )

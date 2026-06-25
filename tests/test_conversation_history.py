@@ -72,6 +72,5 @@ class ConversationHistoryTest(unittest.TestCase):
         self.assertIs(exchange.messages, messages)
         self.assertEqual(exchange.messages[0]["content"], "Original")
 
-
 if __name__ == "__main__":
     unittest.main()

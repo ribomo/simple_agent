@@ -54,6 +54,10 @@ def main() -> None:
         model=model,
         command_approver=approve_run_command,
         compactor=compactor,
+        auto_compact_max_tokens=_env_optional_positive_int(
+            os.environ.get("LLM_COMPACTION_AUTO_MAX_TOKENS"),
+            200_000,
+        ),
     )
 
     run_interactive_terminal(agent)
@@ -65,4 +69,11 @@ def _env_int(value: str | None, default: int) -> int:
     parsed = int(value)
     if parsed < 0:
         raise ValueError("integer environment settings must be non-negative")
+    return parsed
+
+
+def _env_optional_positive_int(value: str | None, default: int) -> int | None:
+    parsed = _env_int(value, default)
+    if parsed == 0:
+        return None
     return parsed

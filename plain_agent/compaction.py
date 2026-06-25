@@ -27,6 +27,10 @@ class CompactionConfig:
     keep_recent_exchanges: int = 2
     model: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.keep_recent_exchanges < 1:
+            raise ValueError("keep_recent_exchanges must be 1 or greater")
+
 
 @dataclass
 class CompactionWindow:
@@ -41,15 +45,11 @@ def build_compaction_window(
     history: ConversationHistory,
     keep_recent_exchanges: int,
 ) -> CompactionWindow:
+    if keep_recent_exchanges < 1:
+        raise ValueError("keep_recent_exchanges must be 1 or greater")
+
     exchanges = history.exchanges()
     system_messages = [message for message in history if message["role"] == SYSTEM_ROLE]
-
-    if keep_recent_exchanges <= 0:
-        return CompactionWindow(
-            system_messages=system_messages,
-            old_exchanges=exchanges,
-            recent_exchanges=[],
-        )
 
     # Summarize only the older exchanges; the most recent exchanges stay verbatim.
     split_index = max(0, len(exchanges) - keep_recent_exchanges)

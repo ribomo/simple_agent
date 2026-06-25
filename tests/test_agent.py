@@ -19,7 +19,7 @@ sys.modules.setdefault("openai.types.chat", fake_openai_chat_module)
 sys.modules.setdefault("openai.types.chat.chat_completion_chunk", fake_openai_chat_chunk_module)
 
 from plain_agent.agent_loop import SimpleAgent
-from plain_agent.streaming import TextDelta, ToolResult
+from plain_agent.streaming import AutoCompaction, TextDelta, ToolResult
 
 
 def stream_chunk(content=None, tool_calls=None):
@@ -116,6 +116,45 @@ class SimpleAgentTest(unittest.TestCase):
 
         list(agent.respond_stream("Hi"))
 
+        self.assertEqual(compactor.calls, [])
+
+    def test_respond_stream_auto_compacts_before_model_call_when_threshold_is_reached(self) -> None:
+        llm_client = FakeLLMClient([stream_response(["Hello"])])
+        compactor = FakeCompactor()
+        agent = SimpleAgent(
+            llm_client=llm_client,
+            model="test-model",
+            compactor=compactor,
+            auto_compact_max_tokens=1,
+        )
+
+        events = list(agent.respond_stream("Hi"))
+
+        self.assertIsInstance(events[0], AutoCompaction)
+        self.assertEqual(events[1:], [TextDelta("Hello")])
+        self.assertEqual(len(compactor.calls), 1)
+        self.assertEqual(
+            [message["role"] for message in compactor.calls[0]],
+            ["system", "user"],
+        )
+        self.assertEqual(
+            [message["role"] for message in llm_client.chat.completions.calls[0]["messages"]],
+            ["system", "user"],
+        )
+
+    def test_respond_stream_does_not_auto_compact_below_threshold(self) -> None:
+        llm_client = FakeLLMClient([stream_response(["Hello"])])
+        compactor = FakeCompactor()
+        agent = SimpleAgent(
+            llm_client=llm_client,
+            model="test-model",
+            compactor=compactor,
+            auto_compact_max_tokens=1_000_000,
+        )
+
+        events = list(agent.respond_stream("Hi"))
+
+        self.assertEqual(events, [TextDelta("Hello")])
         self.assertEqual(compactor.calls, [])
 
     def test_compact_history_uses_compactor_with_completed_history(self) -> None:

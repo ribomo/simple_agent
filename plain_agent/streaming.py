@@ -7,6 +7,7 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
 )
 
+from plain_agent.conversation_history import ContextSize
 from plain_agent.message_types import ASSISTANT_ROLE, AssistantMessageDict, ToolCallDict
 
 
@@ -25,6 +26,14 @@ class ToolResult:
     name: str
     result: str
     ok: bool
+
+
+@dataclass
+class AutoCompaction:
+    """Conversation history was automatically compacted before an LLM call."""
+
+    before: ContextSize
+    after: ContextSize
 
 
 def merge_tool_call_delta_into(tool_call: ToolCallDict, tool_call_delta: ChoiceDeltaToolCall) -> None:

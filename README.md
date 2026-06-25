@@ -53,6 +53,10 @@ export LLM_MODEL="gpt-5.4-mini"
 
 You can still set `LLM_BASE_URL` when you want to override the provider default, such as pointing at a local OpenAI compatible server like Ollama.
 
+Context compaction runs automatically when the estimated conversation history reaches 200k tokens.
+Set `LLM_COMPACTION_AUTO_MAX_TOKENS` to change that threshold, or set it to `0` to disable automatic compaction.
+You can also run `/compact` in the terminal to compact manually.
+
 ## Run
 
 ```bash

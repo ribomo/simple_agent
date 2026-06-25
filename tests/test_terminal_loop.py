@@ -4,18 +4,29 @@ import unittest
 from unittest.mock import patch
 
 from plain_agent.conversation_history import ContextSize
-from plain_agent.streaming import TextDelta, ToolResult
-from plain_agent.terminal_loop import approve_run_command, run_interactive_terminal
+from plain_agent.streaming import AutoCompaction, TextDelta, ToolResult
+from plain_agent.terminal_loop import (
+    _estimate_token_count,
+    _format_token_count,
+    approve_run_command,
+    run_interactive_terminal,
+)
 
 
 class FakeAgent:
-    def __init__(self, compact_result: bool = False) -> None:
+    def __init__(self, compact_result: bool = False, auto_compact: bool = False) -> None:
         self.prompts = []
         self.compact_result = compact_result
         self.compact_calls = 0
+        self.auto_compact = auto_compact
 
     def respond_stream(self, user_input: str):
         self.prompts.append(user_input)
+        if self.auto_compact:
+            yield AutoCompaction(
+                before=ContextSize(message_count=8, char_count=8_400, byte_count=8_400),
+                after=ContextSize(message_count=4, char_count=4_200, byte_count=4_200),
+            )
         yield TextDelta("Hello")
         yield TextDelta(" there")
         yield ToolResult(
@@ -27,7 +38,7 @@ class FakeAgent:
         yield TextDelta("Done")
 
     def context_size(self) -> ContextSize:
-        return ContextSize(message_count=4, char_count=84, byte_count=84)
+        return ContextSize(message_count=4, char_count=8_400, byte_count=8_400)
 
     def compact_history(self) -> bool:
         self.compact_calls += 1
@@ -50,7 +61,7 @@ class TerminalLoopTest(unittest.TestCase):
             "Hello there\n[tool list_files: ok]\nDone\n",
             output.getvalue(),
         )
-        self.assertIn("[conversation history: 4 messages, 84 chars, 84 bytes]\n\n", output.getvalue())
+        self.assertIn("[conversation history: 4 messages, ~2.1k tokens]\n\n", output.getvalue())
 
     def test_run_interactive_terminal_compacts_on_command(self) -> None:
         agent = FakeAgent(compact_result=True)
@@ -63,7 +74,18 @@ class TerminalLoopTest(unittest.TestCase):
         self.assertEqual(agent.prompts, [])
         self.assertEqual(agent.compact_calls, 1)
         self.assertIn("[conversation compacted]\n", output.getvalue())
-        self.assertIn("[conversation history: 4 messages, 84 chars, 84 bytes]\n\n", output.getvalue())
+        self.assertIn("[conversation history: 4 messages, ~2.1k tokens]\n\n", output.getvalue())
+
+    def test_run_interactive_terminal_reports_auto_compaction_events(self) -> None:
+        agent = FakeAgent(auto_compact=True)
+        output = StringIO()
+
+        with patch("builtins.input", side_effect=["Hi", "exit"]):
+            with redirect_stdout(output):
+                run_interactive_terminal(agent)
+
+        self.assertIn("[conversation auto-compacted: ~2.1k -> ~1.1k tokens]\n", output.getvalue())
+        self.assertIn("Hello there\n", output.getvalue())
 
     def test_run_interactive_terminal_reports_when_compact_has_nothing_to_do(self) -> None:
         agent = FakeAgent(compact_result=False)
@@ -85,6 +107,15 @@ class TerminalLoopTest(unittest.TestCase):
                 run_interactive_terminal(FakeAgent())
 
         self.assertTrue(output.getvalue().endswith("\n\n"))
+
+    def test_estimate_token_count_uses_character_heuristic(self) -> None:
+        self.assertEqual(_estimate_token_count(0), 0)
+        self.assertEqual(_estimate_token_count(1), 1)
+        self.assertEqual(_estimate_token_count(8_400), 2_100)
+
+    def test_format_token_count_uses_k_suffix_for_large_counts(self) -> None:
+        self.assertEqual(_format_token_count(999), "999")
+        self.assertEqual(_format_token_count(2_100), "2.1k")
 
     def test_approve_run_command_accepts_yes(self) -> None:
         output = StringIO()

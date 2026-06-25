@@ -64,15 +64,21 @@ class ConversationCompactorTest(unittest.TestCase):
         self.assertEqual(window.old_exchanges[0].messages[0]["content"], "First")
         self.assertEqual(window.recent_exchanges[0].messages[0]["content"], "Third")
 
-    def test_build_compaction_window_can_keep_no_recent_exchanges(self) -> None:
+    def test_build_compaction_window_rejects_zero_recent_exchanges(self) -> None:
         history = ConversationHistory("System")
         history.append_user("First")
         history.append_assistant("First answer")
 
-        window = build_compaction_window(history, keep_recent_exchanges=0)
+        with self.assertRaisesRegex(ValueError, "keep_recent_exchanges must be 1 or greater"):
+            build_compaction_window(history, keep_recent_exchanges=0)
 
-        self.assertEqual(len(window.old_exchanges), 1)
-        self.assertEqual(window.recent_exchanges, [])
+    def test_compaction_config_rejects_zero_recent_exchanges(self) -> None:
+        with self.assertRaisesRegex(ValueError, "keep_recent_exchanges must be 1 or greater"):
+            CompactionConfig(keep_recent_exchanges=0)
+
+    def test_compaction_config_rejects_negative_recent_exchanges(self) -> None:
+        with self.assertRaisesRegex(ValueError, "keep_recent_exchanges must be 1 or greater"):
+            CompactionConfig(keep_recent_exchanges=-1)
 
     def test_build_compaction_window_handles_short_history(self) -> None:
         history = ConversationHistory("System")

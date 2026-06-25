@@ -9,12 +9,15 @@ from plain_agent.conversation_history import ContextSize, ConversationHistory
 from plain_agent.message_types import ToolCallDict
 from plain_agent.prompt import INITIAL_PROMPT
 from plain_agent.streaming import (
+    AutoCompaction,
     ChatCompletionStreamAccumulator,
     TextDelta,
     ToolResult,
 )
 from plain_agent.tools.tools import Tools
 from plain_agent.tools.utils import error
+
+ESTIMATED_CHARS_PER_TOKEN = 4
 
 
 class SimpleAgent:
@@ -25,22 +28,28 @@ class SimpleAgent:
         llm_client: Any,
         model: str,
         workspace: str = ".",
-        max_turns: int = 5,
+        max_turns: int = 10,
         command_approver: Callable[[str], bool] | None = None,
         compactor: ConversationCompactor | None = None,
+        auto_compact_max_tokens: int | None = None,
     ) -> None:
         self.llm_client = llm_client
         self.model = model
         self.max_turns = max_turns
         self.command_approver = command_approver
         self.compactor = compactor
+        self.auto_compact_max_tokens = auto_compact_max_tokens
         self.tools = Tools(workspace)
         self.conversation_history = ConversationHistory(INITIAL_PROMPT)
 
-    def respond_stream(self, user_input: str) -> Generator[TextDelta | ToolResult, None, None]:
+    def respond_stream(self, user_input: str) -> Generator[TextDelta | ToolResult | AutoCompaction, None, None]:
         self.conversation_history.append_user(user_input)
 
         for _ in range(self.max_turns):
+            auto_compaction = self._compact_history_if_over_token_limit()
+            if auto_compaction is not None:
+                yield auto_compaction
+
             accumulator = ChatCompletionStreamAccumulator()
             for chunk in self._create_llm_stream():
                 for event in accumulator.add_chunk(chunk):
@@ -74,6 +83,27 @@ class SimpleAgent:
         if self.compactor is None:
             return False
         return self.compactor.compact(self.conversation_history)
+
+    def _compact_history_if_over_token_limit(self) -> AutoCompaction | None:
+        if self.compactor is None or self.auto_compact_max_tokens is None:
+            return None
+
+        current_size = self.context_size()
+        if self._estimate_token_count(current_size.char_count) < self.auto_compact_max_tokens:
+            return None
+
+        # Run compaction
+        compacted = self.compactor.compact(self.conversation_history)
+        if not compacted:
+            return None
+
+        after = self.context_size()
+        return AutoCompaction(before=current_size, after=after)
+
+    def _estimate_token_count(self, char_count: int) -> int:
+        if char_count <= 0:
+            return 0
+        return max(1, round(char_count / ESTIMATED_CHARS_PER_TOKEN))
 
     def _create_llm_stream(self) -> Iterable[Any]:
         return self.llm_client.chat.completions.create(

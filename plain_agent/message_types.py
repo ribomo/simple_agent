@@ -3,6 +3,12 @@
 from typing import Literal, NotRequired, TypedDict
 
 
+SYSTEM_ROLE = "system"
+USER_ROLE = "user"
+ASSISTANT_ROLE = "assistant"
+TOOL_ROLE = "tool"
+
+
 class SystemMessage(TypedDict):
     role: Literal["system"]
     content: str

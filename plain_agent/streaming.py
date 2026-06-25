@@ -7,7 +7,7 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCall,
 )
 
-from plain_agent.message_types import AssistantMessageDict, ToolCallDict
+from plain_agent.message_types import ASSISTANT_ROLE, AssistantMessageDict, ToolCallDict
 
 
 @dataclass
@@ -87,7 +87,7 @@ class ChatCompletionStreamAccumulator:
         return events
 
     def assistant_message(self) -> AssistantMessageDict:
-        message_dict: AssistantMessageDict = {"role": "assistant", "content": self.full_text or None}
+        message_dict: AssistantMessageDict = {"role": ASSISTANT_ROLE, "content": self.full_text or None}
         if self.tool_calls_by_index:
             message_dict["tool_calls"] = [
                 self.tool_calls_by_index[index]

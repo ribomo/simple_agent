@@ -56,7 +56,7 @@ class TerminalRenderer:
             self.print_blank_line()
 
     def _assistant_markdown(self) -> Markdown:
-        return Markdown(self._assistant_text.strip())
+        return Markdown(self._assistant_text.rstrip())
 
     def print_tool_result(self, event: ToolResult) -> None:
         status = "ok" if event.ok else "error"

@@ -2,7 +2,6 @@ import threading
 import unittest
 
 from rich.text import Text
-from textual.events import MouseMove
 from textual.selection import SELECT_ALL
 
 from plain_agent.conversation_history import ContextSize
@@ -266,7 +265,7 @@ class _BlockingCompactionAgent(_StreamingAgent):
 
 async def _drag(pilot, start, start_offset, end, end_offset) -> None:
     await pilot.mouse_down(start, offset=start_offset)
-    await pilot._post_mouse_events([MouseMove], end, offset=end_offset, button=1)
+    await pilot.hover(end, offset=end_offset)
     await pilot.mouse_up(end, offset=end_offset)
     await pilot.pause()
 

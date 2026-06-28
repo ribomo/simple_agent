@@ -49,6 +49,7 @@ class CommandRuntime:
             process = subprocess.Popen(
                 sandboxed_argv,
                 cwd=request.workspace,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

@@ -1,9 +1,11 @@
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from plain_agent.sandbox import CommandRequest
 from plain_agent.tools.list_files import ListFilesTool
@@ -185,6 +187,21 @@ class ToolsTest(unittest.TestCase):
             self.assertEqual(result["stderr"], "")
             self.assertFalse(result["timed_out"])
             self.assertEqual(sandbox.requests[0].mode.value, "read-only")
+
+    def test_run_command_does_not_inherit_stdin(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool = RunCommandTool(PassthroughSandbox())
+
+            with patch(
+                "plain_agent.tools.command_runtime.subprocess.Popen",
+                wraps=subprocess.Popen,
+            ) as popen:
+                result = json.loads(
+                    tool.run(Path(temp_dir), {"argv": ["/bin/true"]})
+                )
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(popen.call_args.kwargs["stdin"], subprocess.DEVNULL)
 
     def test_run_command_reports_nonzero_exit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

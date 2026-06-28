@@ -100,7 +100,6 @@ class BubblewrapSandbox:
             "--die-with-parent",
             "--new-session",
             "--unshare-user",
-            "--disable-userns",
             "--unshare-pid",
             "--unshare-ipc",
             "--unshare-net",

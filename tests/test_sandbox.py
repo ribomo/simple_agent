@@ -132,7 +132,6 @@ class BubblewrapSandboxTest(unittest.TestCase):
                 "--unshare-ipc",
                 "--unshare-net",
                 "--unshare-uts",
-                "--disable-userns",
                 "--cap-drop",
                 "--clearenv",
             ):

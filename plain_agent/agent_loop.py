@@ -38,7 +38,7 @@ class SimpleAgent:
         self.command_approver = command_approver
         self.compactor = compactor
         self.auto_compact_max_tokens = auto_compact_max_tokens
-        self.tools = tools or Tools(workspace)
+        self.tools = tools if tools is not None else Tools(workspace)
         self.startup_warnings = self.tools.startup_warnings
         self.conversation_history = ConversationHistory(INITIAL_PROMPT)
 

@@ -64,7 +64,7 @@ class CommandRequest:
 class SandboxBackend(Protocol):
     """Build an OS-enforced command invocation."""
 
-    def probe(self, timeout_seconds: float = 2) -> None:
+    def verify_usable(self, timeout_seconds: float = 2) -> None:
         """Raise when the backend cannot enforce its policy on this host."""
 
     def build_command(self, request: CommandRequest) -> list[str]:

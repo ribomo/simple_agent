@@ -44,11 +44,11 @@ sudo dnf install bubblewrap
 sudo pacman -S bubblewrap
 ```
 
-Plain Agent probes Bubblewrap at startup. If it is missing or the kernel does not permit the
-required user and network namespaces, command execution is disabled and the file tools remain
-available. There is no unsandboxed command fallback. To keep the sandbox launcher outside the
-workspace trust boundary, Plain Agent checks only `/usr/bin/bwrap` and `/bin/bwrap`; it does not
-resolve Bubblewrap through `PATH`.
+Plain Agent verifies that Bubblewrap is usable at startup. If it is missing or the kernel does not
+permit the required user and network namespaces, command execution is disabled and the file tools
+remain available. There is no unsandboxed command fallback. To keep the sandbox launcher outside
+the workspace trust boundary, Plain Agent checks only `/usr/bin/bwrap` and `/bin/bwrap`; it does
+not resolve Bubblewrap through `PATH`.
 
 ## Configuration
 
@@ -114,7 +114,7 @@ Additional toolchains can be exposed read-only with an OS-path-separated list of
 existing paths:
 
 ```bash
-export PLAIN_AGENT_SANDBOX_READ_ROOTS="/opt/toolchain:/home/me/.local/share/special-runtime"
+export PLAIN_AGENT_SANDBOX_ADDITIONAL_READ_ROOTS="/opt/toolchain:/home/me/.local/share/special-runtime"
 ```
 
 Each extra root expands the confidentiality boundary: sandboxed commands can read everything
@@ -134,5 +134,5 @@ Run the test suite with the standard library test runner:
 uv run python -m unittest discover
 ```
 
-Linux integration tests run when the Bubblewrap availability probe succeeds and otherwise report
-one skipped test class.
+Linux integration tests run when Bubblewrap availability verification succeeds and otherwise
+report one skipped test class.

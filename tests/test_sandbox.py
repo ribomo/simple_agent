@@ -14,11 +14,11 @@ from plain_agent.sandbox import (
 )
 from plain_agent.sandbox.bubblewrap import (
     SandboxDiscovery,
-    _find_bubblewrap,
-    _masked_workspace_paths,
     discover_linux_sandbox,
     parse_read_roots,
 )
+from plain_agent.sandbox.bubblewrap.discovery import _find_bubblewrap
+from plain_agent.sandbox.bubblewrap.workspace import masked_workspace_paths
 from plain_agent.tools.tools import Tools
 
 
@@ -101,7 +101,7 @@ class BubblewrapSandboxTest(unittest.TestCase):
 
             with (
                 patch(
-                    "plain_agent.sandbox.bubblewrap.BUBBLEWRAP_PATHS",
+                    "plain_agent.sandbox.bubblewrap.discovery.BUBBLEWRAP_CANDIDATE_PATHS",
                     (trusted,),
                 ),
                 patch.dict(os.environ, {"PATH": str(untrusted.parent)}),
@@ -145,7 +145,7 @@ class BubblewrapSandboxTest(unittest.TestCase):
             with patch.dict(
                 os.environ,
                 {
-                    "PATH": f"/unmounted/bin{os.pathsep}/usr/bin",
+                    "PATH": f"/etc{os.pathsep}/unmounted/bin{os.pathsep}/usr/bin",
                     "TERM": "xterm-256color",
                     "LC_CTYPE": "C.UTF-8",
                     "LC_API_KEY": "must-not-leak-either",
@@ -194,6 +194,7 @@ class BubblewrapSandboxTest(unittest.TestCase):
             self.assertEqual(env["LC_CTYPE"], "C.UTF-8")
             self.assertNotIn("LC_API_KEY", env)
             self.assertNotIn("OPENAI_API_KEY", env)
+            self.assertNotIn("/etc", env["PATH"].split(os.pathsep))
             self.assertNotIn("/unmounted/bin", env["PATH"])
             self.assertIn(str(workspace / ".venv" / "bin"), env["PATH"])
 
@@ -252,7 +253,7 @@ class BubblewrapSandboxTest(unittest.TestCase):
                     SandboxConfigurationError,
                     "could not inspect workspace protection path",
                 ):
-                    _masked_workspace_paths(workspace)
+                    masked_workspace_paths(workspace)
 
     def test_unavailable_backend_omits_run_command_and_keeps_file_tools(self) -> None:
         discovery = SandboxDiscovery(None, "run_command is disabled: install Bubblewrap")
@@ -264,16 +265,16 @@ class BubblewrapSandboxTest(unittest.TestCase):
         self.assertIn("read_file", names)
         self.assertEqual(tools.startup_warnings, [discovery.warning])
 
-    def test_discovery_fails_closed_when_bubblewrap_probe_fails(self) -> None:
+    def test_discovery_fails_closed_when_bubblewrap_verification_fails(self) -> None:
         with (
-            patch("plain_agent.sandbox.bubblewrap.sys.platform", "linux"),
+            patch("plain_agent.sandbox.bubblewrap.discovery.sys.platform", "linux"),
             patch(
-                "plain_agent.sandbox.bubblewrap._find_bubblewrap",
+                "plain_agent.sandbox.bubblewrap.discovery._find_bubblewrap",
                 return_value=Path("/usr/bin/bwrap"),
             ),
             patch.object(
                 BubblewrapSandbox,
-                "probe",
+                "verify_usable",
                 side_effect=SandboxUnavailableError("namespaces unavailable"),
             ),
         ):
@@ -283,7 +284,7 @@ class BubblewrapSandboxTest(unittest.TestCase):
         self.assertIn("namespaces unavailable", discovery.warning or "")
 
     def test_discovery_reports_unsupported_platform(self) -> None:
-        with patch("plain_agent.sandbox.bubblewrap.sys.platform", "darwin"):
+        with patch("plain_agent.sandbox.bubblewrap.discovery.sys.platform", "darwin"):
             discovery = discover_linux_sandbox()
 
         self.assertIsNone(discovery.backend)

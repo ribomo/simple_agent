@@ -8,7 +8,7 @@ from plain_agent.ui.terminal_renderer import TerminalRenderer
 
 
 def approve_run_command(request: CommandRequest) -> bool:
-    """Ask the user whether a requested shell command may run."""
+    """Ask the user whether a requested sandboxed command may run."""
     while True:
         answer = input(
             f"\nApprove [{request.mode.value}] command `{request.display}`? [y/N] "

@@ -19,7 +19,7 @@ from plain_agent.sandbox.bubblewrap import (
 )
 from plain_agent.sandbox.bubblewrap.discovery import _find_bubblewrap
 from plain_agent.sandbox.bubblewrap.workspace import masked_workspace_paths
-from plain_agent.tools.tools import Tools
+from plain_agent.tools.registry import ToolRegistry
 
 
 class SandboxTypesTest(unittest.TestCase):
@@ -257,8 +257,8 @@ class BubblewrapSandboxTest(unittest.TestCase):
 
     def test_unavailable_backend_omits_run_command_and_keeps_file_tools(self) -> None:
         discovery = SandboxDiscovery(None, "run_command is disabled: install Bubblewrap")
-        with patch("plain_agent.tools.tools.discover_linux_sandbox", return_value=discovery):
-            tools = Tools(".")
+        with patch("plain_agent.tools.registry.discover_linux_sandbox", return_value=discovery):
+            tools = ToolRegistry(".")
 
         names = [definition["function"]["name"] for definition in tools.definitions()]
         self.assertNotIn("run_command", names)

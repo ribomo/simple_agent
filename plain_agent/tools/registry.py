@@ -1,22 +1,22 @@
-"""Dispatcher for workspace tools."""
+"""Registry and dispatcher for workspace tools."""
 
 from pathlib import Path
 
 from plain_agent.sandbox import SandboxBackend, discover_linux_sandbox
 from plain_agent.tools.base_tool import BaseTool
-from plain_agent.tools.utils import error
+from plain_agent.tools.edit_file import EditFileTool
 from plain_agent.tools.list_files import ListFilesTool
 from plain_agent.tools.read_file import ReadFileTool
-from plain_agent.tools.search_text import SearchTextTool
-from plain_agent.tools.write_file import WriteFileTool
-from plain_agent.tools.edit_file import EditFileTool
 from plain_agent.tools.run_command import RunCommandTool
+from plain_agent.tools.search_text import SearchTextTool
+from plain_agent.tools.utils import error
+from plain_agent.tools.write_file import WriteFileTool
 
 _AUTO_SANDBOX = object()
 
 
-class Tools:
-    """Small tool dispatcher scoped to a workspace directory."""
+class ToolRegistry:
+    """Registry and dispatcher scoped to a workspace directory."""
 
     def __init__(
         self,
@@ -28,7 +28,7 @@ class Tools:
         self.root = Path(root).resolve()
         self.max_read_chars = max_read_chars
         self.max_search_results = max_search_results
-        tool_list: list[BaseTool] = [
+        registered_tools: list[BaseTool] = [
             ListFilesTool(),
             ReadFileTool(max_chars=self.max_read_chars),
             SearchTextTool(max_results=self.max_search_results),
@@ -42,21 +42,21 @@ class Tools:
             if discovery.warning is not None:
                 self.startup_warnings.append(discovery.warning)
         if sandbox_backend is not None:
-            tool_list.append(RunCommandTool(sandbox_backend))
+            registered_tools.append(RunCommandTool(sandbox_backend))
 
-        self.tools: dict[str, BaseTool] = {
+        self._tools: dict[str, BaseTool] = {
             tool.name: tool
-            for tool in tool_list
+            for tool in registered_tools
         }
 
     def definitions(self) -> list[dict[str, object]]:
-        return [tool.definition for tool in self.tools.values()]
+        return [tool.definition for tool in self._tools.values()]
 
     def run(self, name: str, arguments: dict[str, object]) -> str:
-        tool = self.tools.get(name)
+        tool = self._tools.get(name)
         if tool is None:
             return error(f"unknown tool: {name}")
         return tool.run(self.root, arguments)
 
     def has(self, name: str) -> bool:
-        return name in self.tools
+        return name in self._tools

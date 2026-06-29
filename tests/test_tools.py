@@ -15,7 +15,7 @@ from plain_agent.tools.write_file import WriteFileTool
 from plain_agent.tools.edit_file import EditFileTool
 from plain_agent.tools.run_command import RunCommandTool
 from plain_agent.tools.command_runtime import CommandRuntime
-from plain_agent.tools.tools import Tools
+from plain_agent.tools.registry import ToolRegistry
 
 
 class PassthroughSandbox:
@@ -29,12 +29,12 @@ class PassthroughSandbox:
         return list(request.argv)
 
 
-class ToolsTest(unittest.TestCase):
+class ToolRegistryTest(unittest.TestCase):
     def test_read_file_returns_file_content(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / "notes.txt").write_text("hello from a file", encoding="utf-8")
-            tools = Tools(root=root)
+            tools = ToolRegistry(root=root)
 
             result = json.loads(tools.run("read_file", {"path": "notes.txt"}))
 
@@ -45,7 +45,7 @@ class ToolsTest(unittest.TestCase):
 
     def test_read_file_reports_missing_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            tools = Tools(root=temp_dir)
+            tools = ToolRegistry(root=temp_dir)
 
             result = json.loads(tools.run("read_file", {"path": "missing.txt"}))
 
@@ -54,7 +54,7 @@ class ToolsTest(unittest.TestCase):
 
     def test_rejects_paths_outside_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            tools = Tools(root=temp_dir)
+            tools = ToolRegistry(root=temp_dir)
 
             result = json.loads(tools.run("read_file", {"path": "../outside.txt"}))
 
@@ -66,7 +66,7 @@ class ToolsTest(unittest.TestCase):
             root = Path(temp_dir)
             inside = root / "notes.txt"
             inside.write_text("inside", encoding="utf-8")
-            tools = Tools(root=root)
+            tools = ToolRegistry(root=root)
 
             inside_result = json.loads(tools.run("read_file", {"path": str(inside)}))
             outside_result = json.loads(tools.run("read_file", {"path": "/tmp/outside.txt"}))
@@ -82,7 +82,7 @@ class ToolsTest(unittest.TestCase):
             outside = root.parent / "outside-permission-target.txt"
             outside.write_text("secret", encoding="utf-8")
             (root / "link.txt").symlink_to(outside)
-            tools = Tools(root=root)
+            tools = ToolRegistry(root=root)
 
             try:
                 result = json.loads(tools.run("read_file", {"path": "link.txt"}))
@@ -94,7 +94,7 @@ class ToolsTest(unittest.TestCase):
 
     def test_list_files_rejects_invalid_path_argument(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            tools = Tools(root=temp_dir)
+            tools = ToolRegistry(root=temp_dir)
 
             result = json.loads(tools.run("list_files", {"path": 123}))
 
@@ -109,7 +109,7 @@ class ToolsTest(unittest.TestCase):
             (root / "private.key").write_text("SECRET=value\n", encoding="utf-8")
             (root / ".agents").mkdir()
             (root / ".agents" / "notes.txt").write_text("SECRET=value\n", encoding="utf-8")
-            tools = Tools(root=root)
+            tools = ToolRegistry(root=root)
 
             read_env = json.loads(tools.run("read_file", {"path": ".env"}))
             read_env_example = json.loads(tools.run("read_file", {"path": ".env.example"}))
@@ -135,7 +135,7 @@ class ToolsTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / "one.txt").write_text("alpha\nneedle here\n", encoding="utf-8")
             (root / "two.txt").write_text("nothing\n", encoding="utf-8")
-            tools = Tools(root=root)
+            tools = ToolRegistry(root=root)
 
             result = json.loads(tools.run("search_text", {"query": "needle"}))
 
@@ -150,7 +150,7 @@ class ToolsTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / "src").mkdir()
             (root / "README.md").write_text("# Test", encoding="utf-8")
-            tools = Tools(root=root)
+            tools = ToolRegistry(root=root)
 
             result = json.loads(tools.run("list_files", {}))
 
@@ -158,7 +158,7 @@ class ToolsTest(unittest.TestCase):
             self.assertEqual(result["entries"], ["README.md", "src/"])
 
     def test_tools_expose_definitions(self) -> None:
-        tools = Tools(sandbox_backend=PassthroughSandbox())
+        tools = ToolRegistry(sandbox_backend=PassthroughSandbox())
 
         definitions = tools.definitions()
         run_command_definition = definitions[-1]["function"]
@@ -177,7 +177,7 @@ class ToolsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             sandbox = PassthroughSandbox()
-            tools = Tools(root=root, sandbox_backend=sandbox)
+            tools = ToolRegistry(root=root, sandbox_backend=sandbox)
 
             result = json.loads(tools.run("run_command", {"argv": ["/bin/pwd"]}))
 

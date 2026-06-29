@@ -15,8 +15,9 @@ from plain_agent.streaming import (
     TextDelta,
     ToolResult,
 )
-from plain_agent.tools.tools import Tools
+from plain_agent.tools.registry import ToolRegistry
 from plain_agent.tools.utils import error
+
 
 class SimpleAgent:
     """A tiny Chat Completions agent loop with workspace tools."""
@@ -30,7 +31,7 @@ class SimpleAgent:
         command_approver: Callable[[CommandRequest], bool] | None = None,
         compactor: ConversationCompactor | None = None,
         auto_compact_max_tokens: int | None = None,
-        tools: Tools | None = None,
+        tool_registry: ToolRegistry | None = None,
     ) -> None:
         self.llm_client = llm_client
         self.model = model
@@ -38,8 +39,10 @@ class SimpleAgent:
         self.command_approver = command_approver
         self.compactor = compactor
         self.auto_compact_max_tokens = auto_compact_max_tokens
-        self.tools = tools if tools is not None else Tools(workspace)
-        self.startup_warnings = self.tools.startup_warnings
+        self.tool_registry = (
+            tool_registry if tool_registry is not None else ToolRegistry(workspace)
+        )
+        self.startup_warnings = self.tool_registry.startup_warnings
         self.conversation_history = ConversationHistory(INITIAL_PROMPT)
 
     def respond_stream(self, user_input: str) -> Generator[TextDelta | ToolResult | AutoCompaction, None, None]:
@@ -104,7 +107,7 @@ class SimpleAgent:
         return self.llm_client.chat.completions.create(
             model=self.model,
             messages=self.conversation_history.to_messages(),
-            tools=self.tools.definitions(),
+            tools=self.tool_registry.definitions(),
             tool_choice="auto",
             stream=True,
         )
@@ -117,13 +120,13 @@ class SimpleAgent:
             return error(str(exc))
         if not self._approve_run_command(name, arguments):
             return error("run_command was not approved")
-        return self.tools.run(name, arguments)
+        return self.tool_registry.run(name, arguments)
 
     def _approve_run_command(self, name: str, arguments: dict[str, object]) -> bool:
-        if name != "run_command" or not self.tools.has(name):
+        if name != "run_command" or not self.tool_registry.has(name):
             return True
         try:
-            request = CommandRequest.from_arguments(self.tools.root, arguments)
+            request = CommandRequest.from_arguments(self.tool_registry.root, arguments)
         except SandboxConfigurationError:
             # Invalid requests are rejected by the tool without prompting.
             return True

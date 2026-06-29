@@ -21,7 +21,7 @@ sys.modules.setdefault("openai.types.chat.chat_completion_chunk", fake_openai_ch
 from plain_agent.agent_loop import SimpleAgent
 from plain_agent.sandbox import CommandRequest
 from plain_agent.streaming import AutoCompaction, TextDelta, ToolResult
-from plain_agent.tools.tools import Tools
+from plain_agent.tools.registry import ToolRegistry
 
 
 class PassthroughSandbox:
@@ -29,8 +29,8 @@ class PassthroughSandbox:
         return list(request.argv)
 
 
-def command_tools(workspace: str = ".") -> Tools:
-    return Tools(workspace, sandbox_backend=PassthroughSandbox())
+def command_tool_registry(workspace: str = ".") -> ToolRegistry:
+    return ToolRegistry(workspace, sandbox_backend=PassthroughSandbox())
 
 
 def stream_chunk(content=None, tool_calls=None):
@@ -359,7 +359,7 @@ class SimpleAgentTest(unittest.TestCase):
         agent = SimpleAgent(
             llm_client=llm_client,
             model="test-model",
-            tools=command_tools(),
+            tool_registry=command_tool_registry(),
         )
 
         events = list(agent.respond_stream("Run pwd"))
@@ -393,7 +393,7 @@ class SimpleAgentTest(unittest.TestCase):
             llm_client=llm_client,
             model="test-model",
             command_approver=lambda request: approvals.append(request) or False,
-            tools=command_tools(),
+            tool_registry=command_tool_registry(),
         )
 
         events = list(agent.respond_stream("Run pwd"))
@@ -429,7 +429,7 @@ class SimpleAgentTest(unittest.TestCase):
                 llm_client=llm_client,
                 model="test-model",
                 command_approver=lambda request: approvals.append(request) or True,
-                tools=command_tools(temp_dir),
+                tool_registry=command_tool_registry(temp_dir),
             )
 
             events = list(agent.respond_stream("Run pwd"))

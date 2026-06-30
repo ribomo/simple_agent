@@ -9,7 +9,7 @@ from plain_agent.compaction import (
 )
 from plain_agent.config import AppConfig
 from plain_agent.llm_client import OpenAICompatibleClient
-from plain_agent.terminal_loop import approve_run_command, run_interactive_terminal
+from plain_agent.ui.textual_terminal import run_textual_terminal
 
 
 def main() -> None:
@@ -32,9 +32,8 @@ def main() -> None:
     agent = SimpleAgent(
         llm_client=llm_client,
         model=config.llm.model,
-        command_approver=approve_run_command,
         compactor=compactor,
         auto_compact_max_tokens=config.compaction.auto_max_tokens,
     )
 
-    run_interactive_terminal(agent)
+    run_textual_terminal(agent)

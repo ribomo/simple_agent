@@ -5,13 +5,18 @@ from rich.text import Text
 from plain_agent.conversation_history import ContextSize, estimate_token_count
 from plain_agent.sandbox import CommandRequest
 from plain_agent.streaming import AutoCompaction, ToolResult
-from plain_agent.ui.terminal_renderer import format_token_count
 
 WELCOME_STYLE = "#7dd3c7"
 USER_PROMPT_STYLE = "bold #8bd5ff"
 STATUS_LABEL_STYLE = "#6f7a88"
 STATUS_BRACKET_STYLE = "#4f5b68"
 APPROVAL_STYLE = "bold #f2c572"
+
+
+def format_token_count(token_count: int) -> str:
+    if token_count >= 1_000:
+        return f"{token_count / 1_000:.1f}k"
+    return str(token_count)
 
 
 def format_welcome() -> Text:

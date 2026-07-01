@@ -3,53 +3,47 @@ from pathlib import Path
 
 from plain_agent.sandbox import CommandRequest, SandboxMode
 from plain_agent.tools.permissions.controller import (
-    ApprovalUI,
     PermissionController,
     ApprovalDeniedError,
 )
+from plain_agent.tools.permissions.request import ApprovalDecision, CommandPermissionRequest
 
 
-class RecordingApprovalUI(ApprovalUI):
-    def __init__(self, approved: bool) -> None:
-        self.approved = approved
-        self.requests: list[CommandRequest] = []
+class RecordingApprovalHandler:
+    def __init__(self, decision: ApprovalDecision) -> None:
+        self.decision = decision
+        self.requests: list[CommandPermissionRequest] = []
 
-    def request_approval(self, request: CommandRequest) -> bool:
+    def __call__(self, request: CommandPermissionRequest) -> ApprovalDecision:
         self.requests.append(request)
-        return self.approved
-
-
-class DuckTypedApprovalUI:
-    def request_approval(self, request: CommandRequest) -> bool:
-        return True
+        return self.decision
 
 
 class PermissionControllerTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.request = CommandRequest(
-            argv=("pwd",),
-            mode=SandboxMode.READ_ONLY,
-            workspace=Path.cwd(),
+        self.request = CommandPermissionRequest(
+            command=CommandRequest(
+                argv=("pwd",),
+                mode=SandboxMode.READ_ONLY,
+                workspace=Path.cwd(),
+            ),
+            justification="Inspect the workspace path",
         )
 
-    def test_denies_when_no_approval_ui_is_configured(self) -> None:
+    def test_denies_when_no_approval_handler_is_configured(self) -> None:
         with self.assertRaises(ApprovalDeniedError):
             PermissionController().require_approval(self.request)
 
-    def test_requires_explicit_approval_ui_class(self) -> None:
-        with self.assertRaisesRegex(TypeError, "must be an ApprovalUI"):
-            PermissionController(DuckTypedApprovalUI())
-
-    def test_uses_configured_approval_ui(self) -> None:
-        approval_ui = RecordingApprovalUI(approved=True)
-        controller = PermissionController(approval_ui)
+    def test_uses_configured_approval_handler(self) -> None:
+        approval_handler = RecordingApprovalHandler(ApprovalDecision.ALLOW_ONCE)
+        controller = PermissionController(approval_handler)
 
         controller.require_approval(self.request)
 
-        self.assertEqual(approval_ui.requests, [self.request])
+        self.assertEqual(approval_handler.requests, [self.request])
 
-    def test_raises_when_approval_ui_denies_request(self) -> None:
-        controller = PermissionController(RecordingApprovalUI(approved=False))
+    def test_raises_when_approval_handler_rejects_request(self) -> None:
+        controller = PermissionController(RecordingApprovalHandler(ApprovalDecision.REJECT))
 
         with self.assertRaises(ApprovalDeniedError):
             controller.require_approval(self.request)

@@ -9,13 +9,13 @@ from unittest.mock import patch
 
 from plain_agent.sandbox import CommandRequest, SandboxMode
 from plain_agent.sandbox.bubblewrap import BubblewrapSandbox, discover_linux_sandbox
-from plain_agent.tools.permissions.controller import ApprovalUI, PermissionController
+from plain_agent.tools.permissions.controller import PermissionController
+from plain_agent.tools.permissions.request import ApprovalDecision, CommandPermissionRequest
 from plain_agent.tools.run_command import RunCommandTool
 
 
-class ApprovingUI(ApprovalUI):
-    def request_approval(self, request: CommandRequest) -> bool:
-        return True
+def approve_request(request: CommandPermissionRequest) -> ApprovalDecision:
+    return ApprovalDecision.ALLOW_ONCE
 
 
 class LinuxSandboxIntegrationTest(unittest.TestCase):
@@ -36,12 +36,19 @@ class LinuxSandboxIntegrationTest(unittest.TestCase):
     ) -> dict[str, object]:
         tool = RunCommandTool(
             self.backend,
-            PermissionController(ApprovingUI()),
+            PermissionController(approve_request),
             timeout_seconds=timeout_seconds,
             max_output_chars=max_output_chars,
         )
         return json.loads(
-            tool.run(workspace, {"argv": argv, "mode": mode.value})
+            tool.run(
+                workspace,
+                {
+                    "argv": argv,
+                    "mode": mode.value,
+                    "justification": "Exercise the sandbox integration",
+                },
+            )
         )
 
     def test_workspace_reads_succeed_and_read_only_writes_fail(self) -> None:
@@ -100,15 +107,24 @@ class LinuxSandboxIntegrationTest(unittest.TestCase):
             target = toolchain / "version.txt"
             target.write_text("toolchain data", encoding="utf-8")
             backend = BubblewrapSandbox(self.backend.executable, (toolchain.resolve(),))
-            tool = RunCommandTool(backend, PermissionController(ApprovingUI()))
+            tool = RunCommandTool(backend, PermissionController(approve_request))
 
-            read = json.loads(tool.run(workspace, {"argv": ["cat", str(target)]}))
+            read = json.loads(
+                tool.run(
+                    workspace,
+                    {
+                        "argv": ["cat", str(target)],
+                        "justification": "Read an explicitly permitted root",
+                    },
+                )
+            )
             write = json.loads(
                 tool.run(
                     workspace,
                     {
                         "argv": ["bash", "-lc", f"printf changed > {target}"],
                         "mode": "workspace-write",
+                        "justification": "Verify that extra roots remain read-only",
                     },
                 )
             )

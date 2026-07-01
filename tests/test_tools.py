@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from plain_agent.sandbox import CommandRequest
+from plain_agent.tools.base_tool import BaseTool
 from plain_agent.tools.list_files import ListFilesTool
 from plain_agent.tools.read_file import ReadFileTool
 from plain_agent.tools.search_text import SearchTextTool
@@ -15,7 +16,8 @@ from plain_agent.tools.write_file import WriteFileTool
 from plain_agent.tools.edit_file import EditFileTool
 from plain_agent.tools.run_command import RunCommandTool
 from plain_agent.tools.command_runtime import CommandRuntime
-from plain_agent.tools.permissions.controller import ApprovalUI, PermissionController
+from plain_agent.tools.permissions.controller import PermissionController
+from plain_agent.tools.permissions.request import ApprovalDecision, CommandPermissionRequest
 from plain_agent.tools.registry import ToolRegistry
 
 
@@ -30,20 +32,31 @@ class PassthroughSandbox:
         return list(request.argv)
 
 
-class ApprovingUI(ApprovalUI):
-    def request_approval(self, request: CommandRequest) -> bool:
-        return True
+def approve_request(request: CommandPermissionRequest) -> ApprovalDecision:
+    return ApprovalDecision.ALLOW_ONCE
 
 
 def approved_permissions() -> PermissionController:
-    return PermissionController(ApprovingUI())
+    return PermissionController(approve_request)
 
 
 def run_command_tool(sandbox, **kwargs) -> RunCommandTool:
     return RunCommandTool(sandbox, approved_permissions(), **kwargs)
 
 
+def command_arguments(argv, **kwargs) -> dict[str, object]:
+    return {
+        "argv": argv,
+        "justification": "Exercise command execution",
+        **kwargs,
+    }
+
+
 class ToolRegistryTest(unittest.TestCase):
+    def test_base_tool_is_abstract(self) -> None:
+        with self.assertRaises(TypeError):
+            BaseTool()
+
     def test_read_file_returns_file_content(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -181,7 +194,10 @@ class ToolRegistryTest(unittest.TestCase):
             [definition["function"]["name"] for definition in definitions],
             ["list_files", "read_file", "search_text", "write_file", "edit_file", "run_command"],
         )
-        self.assertEqual(run_command_definition["parameters"]["required"], ["argv"])
+        self.assertEqual(
+            run_command_definition["parameters"]["required"],
+            ["argv", "justification"],
+        )
         self.assertEqual(
             run_command_definition["parameters"]["properties"]["mode"]["enum"],
             ["read-only", "workspace-write"],
@@ -197,7 +213,9 @@ class ToolRegistryTest(unittest.TestCase):
                 permission_controller=approved_permissions(),
             )
 
-            result = json.loads(tools.run("run_command", {"argv": ["/bin/pwd"]}))
+            result = json.loads(
+                tools.run("run_command", command_arguments(["/bin/pwd"]))
+            )
 
             self.assertTrue(result["ok"])
             self.assertEqual(result["exit_code"], 0)
@@ -215,7 +233,7 @@ class ToolRegistryTest(unittest.TestCase):
                 wraps=subprocess.Popen,
             ) as popen:
                 result = json.loads(
-                    tool.run(Path(temp_dir), {"argv": ["/bin/true"]})
+                    tool.run(Path(temp_dir), command_arguments(["/bin/true"]))
                 )
 
             self.assertTrue(result["ok"])
@@ -226,7 +244,10 @@ class ToolRegistryTest(unittest.TestCase):
             tool = run_command_tool(PassthroughSandbox())
 
             result = json.loads(
-                tool.run(Path(temp_dir), {"argv": ["/bin/sh", "-c", "exit 7"]})
+                tool.run(
+                    Path(temp_dir),
+                    command_arguments(["/bin/sh", "-c", "exit 7"]),
+                )
             )
 
             self.assertFalse(result["ok"])
@@ -239,19 +260,33 @@ class ToolRegistryTest(unittest.TestCase):
 
             invalid_values = (None, [], [""], [1], ["echo", "bad\x00arg"])
             results = [
-                json.loads(tool.run(Path(temp_dir), {"argv": value}))
+                json.loads(tool.run(Path(temp_dir), command_arguments(value)))
                 for value in invalid_values
             ]
 
             self.assertTrue(all(not result["ok"] for result in results))
             self.assertTrue(all("argv" in result["error"] for result in results))
 
+    def test_run_command_requires_justification(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool = run_command_tool(PassthroughSandbox())
+
+            result = json.loads(
+                tool.run(Path(temp_dir), {"argv": ["/bin/true"]})
+            )
+
+            self.assertFalse(result["ok"])
+            self.assertIn("justification", result["error"])
+
     def test_run_command_passes_arguments_without_shell_parsing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = run_command_tool(PassthroughSandbox())
 
             result = json.loads(
-                tool.run(Path(temp_dir), {"argv": ["/bin/echo", "one | two", ">", "out"]})
+                tool.run(
+                    Path(temp_dir),
+                    command_arguments(["/bin/echo", "one | two", ">", "out"]),
+                )
             )
 
             self.assertTrue(result["ok"])
@@ -263,7 +298,12 @@ class ToolRegistryTest(unittest.TestCase):
             tool = run_command_tool(PassthroughSandbox())
 
             result = json.loads(
-                tool.run(Path(temp_dir), {"argv": ["/bin/bash", "-lc", "printf explicit-shell"]})
+                tool.run(
+                    Path(temp_dir),
+                    command_arguments(
+                        ["/bin/bash", "-lc", "printf explicit-shell"]
+                    ),
+                )
             )
 
             self.assertTrue(result["ok"])
@@ -277,7 +317,7 @@ class ToolRegistryTest(unittest.TestCase):
             result = json.loads(
                 tool.run(
                     Path(temp_dir),
-                    {"argv": ["/bin/true"], "mode": "workspace-write"},
+                    command_arguments(["/bin/true"], mode="workspace-write"),
                 )
             )
 
@@ -289,7 +329,10 @@ class ToolRegistryTest(unittest.TestCase):
             tool = run_command_tool(PassthroughSandbox())
 
             result = json.loads(
-                tool.run(Path(temp_dir), {"argv": ["/bin/true"], "mode": "unsafe"})
+                tool.run(
+                    Path(temp_dir),
+                    command_arguments(["/bin/true"], mode="unsafe"),
+                )
             )
 
             self.assertFalse(result["ok"])
@@ -301,7 +344,12 @@ class ToolRegistryTest(unittest.TestCase):
             os.mkfifo(fifo_path)
             tool = run_command_tool(PassthroughSandbox(), timeout_seconds=0.001)
 
-            result = json.loads(tool.run(Path(temp_dir), {"argv": ["/bin/cat", "stream"]}))
+            result = json.loads(
+                tool.run(
+                    Path(temp_dir),
+                    command_arguments(["/bin/cat", "stream"]),
+                )
+            )
 
             self.assertFalse(result["ok"])
             self.assertIsNone(result["exit_code"])
@@ -313,7 +361,9 @@ class ToolRegistryTest(unittest.TestCase):
             (root / "long.txt").write_text("abcdef", encoding="utf-8")
             tool = run_command_tool(PassthroughSandbox(), max_output_chars=3)
 
-            result = json.loads(tool.run(root, {"argv": ["/bin/cat", "long.txt"]}))
+            result = json.loads(
+                tool.run(root, command_arguments(["/bin/cat", "long.txt"]))
+            )
 
             self.assertTrue(result["ok"])
             self.assertEqual(result["stdout"], "abc")

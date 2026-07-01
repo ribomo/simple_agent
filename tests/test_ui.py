@@ -9,6 +9,7 @@ from plain_agent.conversation_history import ContextSize
 from plain_agent.sandbox import CommandRequest, SandboxMode
 from plain_agent.streaming import TextDelta, ToolResult
 from plain_agent.tools.permissions.controller import PermissionController
+from plain_agent.tools.permissions.request import CommandPermissionRequest
 from plain_agent.ui.app import PlainAgentApp, parse_approval_answer
 from plain_agent.ui.rendering import (
     format_command_approval,
@@ -21,24 +22,31 @@ from plain_agent.ui.transcript import AssistantResponse, TranscriptEntry
 class TerminalRenderingTest(unittest.TestCase):
     def test_format_command_approval_shows_mode_and_exact_quoted_argv(self) -> None:
         rendered = format_command_approval(
-            CommandRequest(
-                ("bash", "-lc", "printf 'two words'"),
-                SandboxMode.WORKSPACE_WRITE,
-                Path.cwd(),
+            CommandPermissionRequest(
+                command=CommandRequest(
+                    ("bash", "-lc", "printf 'two words'"),
+                    SandboxMode.WORKSPACE_WRITE,
+                    Path.cwd(),
+                ),
+                justification="Create the requested output",
             )
         )
 
         self.assertEqual(
             rendered.plain,
-            "[approval required: workspace-write] bash -lc 'printf '\"'\"'two words'\"'\"''",
+            "[approval required: workspace-write] bash -lc 'printf '\"'\"'two words'\"'\"''\n"
+            "[reason] Create the requested output",
         )
 
     def test_format_command_approval_escapes_terminal_controls(self) -> None:
         rendered = format_command_approval(
-            CommandRequest(
-                ("printf", "\x1b[2K\rspoof"),
-                SandboxMode.READ_ONLY,
-                Path.cwd(),
+            CommandPermissionRequest(
+                command=CommandRequest(
+                    ("printf", "\x1b[2K\rspoof"),
+                    SandboxMode.READ_ONLY,
+                    Path.cwd(),
+                ),
+                justification="Inspect\x1b[2K\rspoof",
             )
         )
 

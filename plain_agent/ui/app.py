@@ -15,9 +15,8 @@ from textual.widgets import Input, Static
 
 from plain_agent.agent_loop import SimpleAgent
 from plain_agent.conversation_history import ContextSize
-from plain_agent.sandbox import CommandRequest
 from plain_agent.streaming import AutoCompaction, TextDelta, ToolResult
-from plain_agent.tools.permissions.controller import ApprovalUI
+from plain_agent.tools.permissions.request import ApprovalDecision, CommandPermissionRequest
 from plain_agent.ui.rendering import (
     USER_PROMPT_STYLE,
     format_auto_compaction,
@@ -72,7 +71,7 @@ def parse_approval_answer(answer: str) -> bool | None:
     return None
 
 
-class PlainAgentApp(App[None], ApprovalUI):
+class PlainAgentApp(App[None]):
     """Full-screen terminal UI for Plain Agent."""
 
     CSS_PATH = "terminal.tcss"
@@ -90,7 +89,7 @@ class PlainAgentApp(App[None], ApprovalUI):
         self._responding = False
         self._compacting = False
         self._pending_approval: PendingApproval | None = None
-        self.agent.permission_controller.set_approval_ui(self)
+        self.agent.permission_controller.set_approval_handler(self.request_approval)
 
     def compose(self) -> ComposeResult:
         yield TranscriptView(id="transcript")
@@ -121,7 +120,7 @@ class PlainAgentApp(App[None], ApprovalUI):
             self._pending_approval.done.set()
         if hasattr(self, "transcript"):
             await self.transcript.finish_assistant()
-        self.agent.permission_controller.set_approval_ui(None)
+        self.agent.permission_controller.set_approval_handler(None)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         event.stop()
@@ -212,7 +211,7 @@ class PlainAgentApp(App[None], ApprovalUI):
     def _start_worker(self, target: Callable[..., None], *args: object) -> None:
         threading.Thread(target=target, args=args, daemon=True).start()
 
-    def request_approval(self, request: CommandRequest) -> bool:
+    def request_approval(self, request: CommandPermissionRequest) -> ApprovalDecision:
         """Ask for command approval through the terminal prompt."""
         pending = PendingApproval()
 
@@ -228,9 +227,13 @@ class PlainAgentApp(App[None], ApprovalUI):
         try:
             self.call_from_thread(ask)
         except RuntimeError:
-            return False
+            return ApprovalDecision.REJECT
         pending.done.wait()
-        return pending.approved
+        return (
+            ApprovalDecision.ALLOW_ONCE
+            if pending.approved
+            else ApprovalDecision.REJECT
+        )
 
     def _call_from_agent_thread(self, callback: Callable[..., object], *args: object) -> None:
         try:

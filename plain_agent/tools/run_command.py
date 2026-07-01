@@ -10,6 +10,7 @@ from plain_agent.tools.permissions.controller import (
     PermissionController,
     ApprovalDeniedError,
 )
+from plain_agent.tools.permissions.request import CommandPermissionRequest
 from plain_agent.tools.utils import error
 
 
@@ -37,8 +38,13 @@ class RunCommandTool(BaseTool):
                 "default": "read-only",
                 "description": "Filesystem access granted to the workspace.",
             },
+            "justification": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Why this command is needed.",
+            },
         },
-        "required": ["argv"],
+        "required": ["argv", "justification"],
         "additionalProperties": False,
     }
 
@@ -49,7 +55,11 @@ class RunCommandTool(BaseTool):
         timeout_seconds: float = 30,
         max_output_chars: int = 12_000,
     ) -> None:
-        self.permission_controller = permission_controller or PermissionController()
+        self.permission_controller = (
+            permission_controller
+            if permission_controller is not None
+            else PermissionController()
+        )
         self.runtime = CommandRuntime(
             sandbox=sandbox,
             timeout_seconds=timeout_seconds,
@@ -58,9 +68,16 @@ class RunCommandTool(BaseTool):
 
     def run(self, root: Path, arguments: dict[str, object]) -> str:
         try:
-            request = CommandRequest.from_arguments(root, arguments)
-            self.permission_controller.require_approval(request)
-            result = self.runtime.run(request)
+            command = CommandRequest.from_arguments(root, arguments)
+            justification = arguments.get("justification")
+            if not isinstance(justification, str) or not justification.strip():
+                raise SandboxConfigurationError("justification must be a non-empty string")
+            permission_request = CommandPermissionRequest(
+                command=command,
+                justification=justification.strip(),
+            )
+            self.permission_controller.require_approval(permission_request)
+            result = self.runtime.run(command)
         except ApprovalDeniedError:
             return error("run_command was not approved")
         except (CommandRuntimeError, SandboxConfigurationError) as exc:

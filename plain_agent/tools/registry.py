@@ -27,7 +27,11 @@ class ToolRegistry:
         self.root = Path(root).resolve()
         self.max_read_chars = max_read_chars
         self.max_search_results = max_search_results
-        self.permission_controller = permission_controller or PermissionController()
+        self.permission_controller = (
+            permission_controller
+            if permission_controller is not None
+            else PermissionController()
+        )
         registered_tools: list[BaseTool] = [
             ListFilesTool(),
             ReadFileTool(max_chars=self.max_read_chars),

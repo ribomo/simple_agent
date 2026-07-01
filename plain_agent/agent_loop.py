@@ -41,7 +41,11 @@ class SimpleAgent:
         self.max_turns = max_turns
         self.compactor = compactor
         self.auto_compact_max_tokens = auto_compact_max_tokens
-        self.permission_controller = permission_controller or PermissionController()
+        self.permission_controller = (
+            permission_controller
+            if permission_controller is not None
+            else PermissionController()
+        )
         self.tool_registry = ToolRegistry(
             workspace,
             permission_controller=self.permission_controller,

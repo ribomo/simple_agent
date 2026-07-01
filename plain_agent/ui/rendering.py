@@ -3,8 +3,9 @@
 from rich.text import Text
 
 from plain_agent.conversation_history import ContextSize, estimate_token_count
-from plain_agent.sandbox import CommandRequest
+from plain_agent.display import escape_display_text
 from plain_agent.streaming import AutoCompaction, ToolResult
+from plain_agent.tools.permissions.request import CommandPermissionRequest
 
 WELCOME_STYLE = "#7dd3c7"
 USER_PROMPT_STYLE = "bold #8bd5ff"
@@ -50,9 +51,11 @@ def format_auto_compaction(event: AutoCompaction) -> Text:
     )
 
 
-def format_command_approval(request: CommandRequest) -> Text:
+def format_command_approval(request: CommandPermissionRequest) -> Text:
+    command = request.command
     return Text(
-        f"[approval required: {request.mode.value}] {request.display}",
+        f"[approval required: {command.mode.value}] {command.display}\n"
+        f"[reason] {escape_display_text(request.justification)}",
         style=APPROVAL_STYLE,
     )
 

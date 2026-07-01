@@ -1,10 +1,11 @@
 """Base class for callable tools."""
 
+from abc import ABC, abstractmethod
 from copy import deepcopy
 from pathlib import Path
 
 
-class BaseTool:
+class BaseTool(ABC):
     """Base class for a tool the model can call."""
 
     name = ""
@@ -25,5 +26,6 @@ class BaseTool:
             },
         }
 
+    @abstractmethod
     def run(self, root: Path, arguments: dict[str, object]) -> str:
-        raise NotImplementedError
+        """Run the tool and return its serialized result."""

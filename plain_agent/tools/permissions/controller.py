@@ -1,14 +1,13 @@
 """User approval flow for protected tool actions."""
 
-from plain_agent.sandbox import CommandRequest
+from collections.abc import Callable
 
+from plain_agent.tools.permissions.request import (
+    ApprovalDecision,
+    CommandPermissionRequest,
+)
 
-class ApprovalUI:
-    """UI that displays a command request and waits for the user's choice."""
-
-    def request_approval(self, request: CommandRequest) -> bool:
-        """Return whether the user approved the request."""
-        raise NotImplementedError
+ApprovalHandler = Callable[[CommandPermissionRequest], ApprovalDecision]
 
 
 class ApprovalDeniedError(PermissionError):
@@ -16,18 +15,19 @@ class ApprovalDeniedError(PermissionError):
 
 
 class PermissionController:
-    """Require the configured UI to approve protected tool actions."""
+    """Require the configured handler to approve protected tool actions."""
 
-    def __init__(self, approval_ui: ApprovalUI | None = None) -> None:
-        self.set_approval_ui(approval_ui)
+    def __init__(self, approval_handler: ApprovalHandler | None = None) -> None:
+        self.set_approval_handler(approval_handler)
 
-    def set_approval_ui(self, approval_ui: ApprovalUI | None) -> None:
-        """Bind or unbind the UI that approves protected tool actions."""
-        if approval_ui is not None and not isinstance(approval_ui, ApprovalUI):
-            raise TypeError("approval_ui must be an ApprovalUI")
-        self.approval_ui = approval_ui
+    def set_approval_handler(self, approval_handler: ApprovalHandler | None) -> None:
+        """Bind or unbind the callback that approves protected tool actions."""
+        self.approval_handler = approval_handler
 
-    def require_approval(self, request: CommandRequest) -> None:
+    def require_approval(self, request: CommandPermissionRequest) -> None:
         """Require approval before the caller continues its side effect."""
-        if self.approval_ui is None or not self.approval_ui.request_approval(request):
+        if (
+            self.approval_handler is None
+            or self.approval_handler(request) is not ApprovalDecision.ALLOW_ONCE
+        ):
             raise ApprovalDeniedError("tool action was not approved")

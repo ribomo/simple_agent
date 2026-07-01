@@ -22,7 +22,8 @@ sys.modules.setdefault("openai.types.chat.chat_completion_chunk", fake_openai_ch
 from plain_agent.agent_loop import SimpleAgent
 from plain_agent.sandbox import CommandRequest
 from plain_agent.streaming import AutoCompaction, TextDelta, ToolResult
-from plain_agent.tools.permissions.controller import ApprovalUI, PermissionController
+from plain_agent.tools.permissions.controller import ApprovalHandler, PermissionController
+from plain_agent.tools.permissions.request import ApprovalDecision, CommandPermissionRequest
 
 
 class PassthroughSandbox:
@@ -30,20 +31,20 @@ class PassthroughSandbox:
         return list(request.argv)
 
 
-class RecordingApprovalUI(ApprovalUI):
-    def __init__(self, approved: bool) -> None:
-        self.approved = approved
-        self.requests: list[CommandRequest] = []
+class RecordingApprovalHandler:
+    def __init__(self, decision: ApprovalDecision) -> None:
+        self.decision = decision
+        self.requests: list[CommandPermissionRequest] = []
 
-    def request_approval(self, request: CommandRequest) -> bool:
+    def __call__(self, request: CommandPermissionRequest) -> ApprovalDecision:
         self.requests.append(request)
-        return self.approved
+        return self.decision
 
 
 def command_agent(
     llm_client,
     workspace: str = ".",
-    approval_ui: ApprovalUI | None = None,
+    approval_handler: ApprovalHandler | None = None,
 ) -> SimpleAgent:
     discovery = SimpleNamespace(backend=PassthroughSandbox(), warning=None)
     with patch("plain_agent.tools.registry.discover_linux_sandbox", return_value=discovery):
@@ -51,7 +52,7 @@ def command_agent(
             llm_client=llm_client,
             model="test-model",
             workspace=workspace,
-            permission_controller=PermissionController(approval_ui),
+            permission_controller=PermissionController(approval_handler),
         )
     return agent
 
@@ -383,7 +384,7 @@ class SimpleAgentTest(unittest.TestCase):
                             index=0,
                             call_id="call_1",
                             name="run_command",
-                            arguments='{"argv": ["/bin/pwd"]}',
+                            arguments='{"argv": ["/bin/pwd"], "justification": "Inspect the workspace path"}',
                             call_type="function",
                         )
                     ]
@@ -403,7 +404,7 @@ class SimpleAgentTest(unittest.TestCase):
         self.assertIn("not approved", tool_result["error"])
 
     def test_run_command_denial_returns_tool_error(self) -> None:
-        approval_ui = RecordingApprovalUI(approved=False)
+        approval_handler = RecordingApprovalHandler(ApprovalDecision.REJECT)
         llm_client = FakeLLMClient(
             [
                 stream_response_with_tool_calls([
@@ -412,7 +413,7 @@ class SimpleAgentTest(unittest.TestCase):
                             index=0,
                             call_id="call_1",
                             name="run_command",
-                            arguments='{"argv": ["/bin/pwd"]}',
+                            arguments='{"argv": ["/bin/pwd"], "justification": "Inspect the workspace path"}',
                             call_type="function",
                         )
                     ]
@@ -422,13 +423,20 @@ class SimpleAgentTest(unittest.TestCase):
         )
         agent = command_agent(
             llm_client,
-            approval_ui=approval_ui,
+            approval_handler=approval_handler,
         )
 
         events = list(agent.respond_stream("Run pwd"))
 
-        self.assertEqual([request.display for request in approval_ui.requests], ["/bin/pwd"])
-        self.assertEqual(approval_ui.requests[0].mode.value, "read-only")
+        self.assertEqual(
+            [request.command.display for request in approval_handler.requests],
+            ["/bin/pwd"],
+        )
+        self.assertEqual(approval_handler.requests[0].command.mode.value, "read-only")
+        self.assertEqual(
+            approval_handler.requests[0].justification,
+            "Inspect the workspace path",
+        )
         self.assertIsInstance(events[0], ToolResult)
         self.assertFalse(events[0].ok)
         tool_result = json.loads(agent.conversation_history[3]["content"])
@@ -437,7 +445,7 @@ class SimpleAgentTest(unittest.TestCase):
 
     def test_run_command_approval_runs_tool(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            approval_ui = RecordingApprovalUI(approved=True)
+            approval_handler = RecordingApprovalHandler(ApprovalDecision.ALLOW_ONCE)
             llm_client = FakeLLMClient(
                 [
                     stream_response_with_tool_calls([
@@ -446,7 +454,7 @@ class SimpleAgentTest(unittest.TestCase):
                                 index=0,
                                 call_id="call_1",
                                 name="run_command",
-                                arguments='{"argv": ["/bin/pwd"], "mode": "workspace-write"}',
+                                arguments='{"argv": ["/bin/pwd"], "mode": "workspace-write", "justification": "Inspect the workspace path"}',
                                 call_type="function",
                             )
                         ]
@@ -457,13 +465,16 @@ class SimpleAgentTest(unittest.TestCase):
             agent = command_agent(
                 llm_client,
                 temp_dir,
-                approval_ui=approval_ui,
+                approval_handler=approval_handler,
             )
 
             events = list(agent.respond_stream("Run pwd"))
 
-        self.assertEqual([request.display for request in approval_ui.requests], ["/bin/pwd"])
-        self.assertEqual(approval_ui.requests[0].mode.value, "workspace-write")
+        self.assertEqual(
+            [request.command.display for request in approval_handler.requests],
+            ["/bin/pwd"],
+        )
+        self.assertEqual(approval_handler.requests[0].command.mode.value, "workspace-write")
         self.assertIsInstance(events[0], ToolResult)
         self.assertTrue(events[0].ok)
         tool_result = json.loads(agent.conversation_history[3]["content"])

@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import mock_open, patch
 
 from plain_agent.sandbox import CommandRequest
+from plain_agent.sandbox.bubblewrap import SandboxDiscovery
 from plain_agent.tools.base_tool import BaseTool
 from plain_agent.tools.list_files import ListFilesTool
 from plain_agent.tools.read_file import ReadFileTool
@@ -218,7 +219,12 @@ class ToolRegistryTest(unittest.TestCase):
             self.assertEqual(result["entries"], ["README.md", "src/"])
 
     def test_tools_expose_definitions(self) -> None:
-        tools = ToolRegistry(sandbox_backend=PassthroughSandbox())
+        discovery = SandboxDiscovery(PassthroughSandbox(), None)
+        with patch(
+            "plain_agent.tools.registry.discover_linux_sandbox",
+            return_value=discovery,
+        ):
+            tools = ToolRegistry()
 
         definitions = tools.definitions()
         run_command_definition = definitions[-1]["function"]
@@ -240,11 +246,15 @@ class ToolRegistryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             sandbox = PassthroughSandbox()
-            tools = ToolRegistry(
-                root=root,
-                sandbox_backend=sandbox,
-                permission_controller=approved_permissions(),
-            )
+            discovery = SandboxDiscovery(sandbox, None)
+            with patch(
+                "plain_agent.tools.registry.discover_linux_sandbox",
+                return_value=discovery,
+            ):
+                tools = ToolRegistry(
+                    root=root,
+                    permission_controller=approved_permissions(),
+                )
 
             result = json.loads(
                 tools.run("run_command", command_arguments(["/bin/pwd"]))

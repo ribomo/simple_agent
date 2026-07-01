@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from plain_agent.sandbox import SandboxBackend, discover_linux_sandbox
+from plain_agent.sandbox import discover_linux_sandbox
 from plain_agent.tools.base_tool import BaseTool
 from plain_agent.tools.edit_file import EditFileTool
 from plain_agent.tools.list_files import ListFilesTool
@@ -13,6 +13,7 @@ from plain_agent.tools.search_text import SearchTextTool
 from plain_agent.tools.utils import error
 from plain_agent.tools.write_file import WriteFileTool
 
+
 class ToolRegistry:
     """Registry and dispatcher scoped to a workspace directory."""
 
@@ -21,7 +22,7 @@ class ToolRegistry:
         root: str | Path = ".",
         max_read_chars: int = 12_000,
         max_search_results: int = 20,
-        sandbox_backend: SandboxBackend | None = None,
+        enable_commands: bool = True,
         permission_controller: PermissionController | None = None,
     ) -> None:
         self.root = Path(root).resolve()
@@ -40,15 +41,14 @@ class ToolRegistry:
             EditFileTool(),
         ]
         self.startup_warnings: list[str] = []
-        if sandbox_backend is None:
+        if enable_commands:
             discovery = discover_linux_sandbox()
-            sandbox_backend = discovery.backend
             if discovery.warning is not None:
                 self.startup_warnings.append(discovery.warning)
-        if sandbox_backend is not None:
-            registered_tools.append(
-                RunCommandTool(sandbox_backend, self.permission_controller)
-            )
+            if discovery.backend is not None:
+                registered_tools.append(
+                    RunCommandTool(discovery.backend, self.permission_controller)
+                )
 
         self._tools: dict[str, BaseTool] = {
             tool.name: tool

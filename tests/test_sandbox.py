@@ -265,6 +265,13 @@ class BubblewrapSandboxTest(unittest.TestCase):
         self.assertIn("read_file", names)
         self.assertEqual(tools.startup_warnings, [discovery.warning])
 
+    def test_commands_can_be_disabled_without_discovery(self) -> None:
+        with patch("plain_agent.tools.registry.discover_linux_sandbox") as discover:
+            tools = ToolRegistry(".", enable_commands=False)
+
+        self.assertFalse(tools.has("run_command"))
+        discover.assert_not_called()
+
     def test_discovery_fails_closed_when_bubblewrap_verification_fails(self) -> None:
         with (
             patch("plain_agent.sandbox.bubblewrap.discovery.sys.platform", "linux"),

@@ -125,14 +125,3 @@ The command sandbox is deliberately offline. Package downloads, remote Git opera
 to local network services fail. Linux is the only supported command-sandbox platform in this
 milestone; macOS and Windows keep `run_command` disabled. Seccomp syscall filtering is planned as
 the next Linux hardening step after the filesystem and network policy is stable.
-
-## Test
-
-Run the test suite with the standard library test runner:
-
-```bash
-uv run python -m unittest discover
-```
-
-Linux integration tests run when Bubblewrap availability verification succeeds and otherwise
-report one skipped test class.

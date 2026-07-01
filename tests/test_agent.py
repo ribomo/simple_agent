@@ -122,6 +122,18 @@ class FakeCompactor:
 
 
 class SimpleAgentTest(unittest.TestCase):
+    def test_constructor_limits_must_be_positive(self) -> None:
+        llm_client = FakeLLMClient([])
+        invalid_options = (
+            {"max_turns": 0},
+            {"auto_compact_max_tokens": 0},
+        )
+
+        for options in invalid_options:
+            with self.subTest(options=options):
+                with self.assertRaisesRegex(ValueError, "positive"):
+                    SimpleAgent(llm_client=llm_client, model="test-model", **options)
+
     def test_respond_stream_yields_text_deltas(self) -> None:
         llm_client = FakeLLMClient([[
             stream_chunk(content="Hello"),

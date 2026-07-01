@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+import math
 
 from plain_agent.environment import (
     ENV_DEEPSEEK_API_KEY,
@@ -67,7 +68,7 @@ class AppConfig:
         return cls(
             llm=_llm_settings(env),
             compaction=CompactionSettings(
-                keep_recent_exchanges=_non_negative_int(
+                keep_recent_exchanges=_positive_int(
                     env.get(ENV_LLM_COMPACTION_KEEP_RECENT_EXCHANGES),
                     2,
                 ),
@@ -105,7 +106,7 @@ def _llm_settings(env: Mapping[str, str]) -> LLMSettings:
         api_key=api_key,
         base_url=env.get(ENV_LLM_BASE_URL, default_base_url),
         model=env.get(ENV_LLM_MODEL, default_model),
-        timeout=float(env.get(ENV_LLM_TIMEOUT, "60")),
+        timeout=_positive_float(env.get(ENV_LLM_TIMEOUT), 60.0),
     )
 
 
@@ -115,6 +116,13 @@ def _non_negative_int(value: str | None, default: int) -> int:
     parsed = int(value)
     if parsed < 0:
         raise ValueError("integer environment settings must be non-negative")
+    return parsed
+
+
+def _positive_int(value: str | None, default: int) -> int:
+    parsed = _non_negative_int(value, default)
+    if parsed == 0:
+        raise ValueError("integer environment settings must be positive")
     return parsed
 
 
@@ -134,3 +142,10 @@ def _bool_value(value: str | None, default: bool) -> bool:
     if normalized in {"0", "false", "no", "off"}:
         return False
     raise ValueError("boolean environment settings must be true or false")
+
+
+def _positive_float(value: str | None, default: float) -> float:
+    parsed = default if value is None else float(value)
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise ValueError("floating-point environment settings must be finite and positive")
+    return parsed

@@ -32,6 +32,10 @@ class SimpleAgent:
         auto_compact_max_tokens: int | None = None,
         permission_controller: PermissionController | None = None,
     ) -> None:
+        if max_turns < 1:
+            raise ValueError("max_turns must be positive")
+        if auto_compact_max_tokens is not None and auto_compact_max_tokens < 1:
+            raise ValueError("auto_compact_max_tokens must be positive when provided")
         self.llm_client = llm_client
         self.model = model
         self.max_turns = max_turns

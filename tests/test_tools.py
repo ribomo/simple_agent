@@ -329,6 +329,17 @@ class ToolRegistryTest(unittest.TestCase):
         self.assertEqual("".join(chunks), "xxxx")
         self.assertEqual(errors, [])
 
+    def test_command_runtime_limits_must_be_positive(self) -> None:
+        constructors = (
+            lambda: CommandRuntime(PassthroughSandbox(), timeout_seconds=0),
+            lambda: CommandRuntime(PassthroughSandbox(), timeout_seconds=float("nan")),
+            lambda: CommandRuntime(PassthroughSandbox(), max_output_chars=0),
+        )
+        for constructor in constructors:
+            with self.subTest(constructor=constructor):
+                with self.assertRaisesRegex(ValueError, "positive"):
+                    constructor()
+
     def test_write_file_creates_new_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

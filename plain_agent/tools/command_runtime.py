@@ -1,6 +1,7 @@
 """Runtime for OS-sandboxed workspace commands."""
 
 from dataclasses import asdict, dataclass
+import math
 import subprocess
 import threading
 from typing import TextIO
@@ -35,6 +36,10 @@ class CommandRuntime:
         timeout_seconds: float = 30,
         max_output_chars: int = 12_000,
     ) -> None:
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be finite and positive")
+        if max_output_chars < 1:
+            raise ValueError("max_output_chars must be positive")
         self.sandbox = sandbox
         self.timeout_seconds = timeout_seconds
         self.max_output_chars = max_output_chars

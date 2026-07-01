@@ -108,6 +108,16 @@ class AppConfigTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "non-negative"):
             AppConfig.from_env({"LLM_COMPACTION_AUTO_MAX_TOKENS": "-1"})
 
+    def test_rejects_zero_recent_exchange_count(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must be positive"):
+            AppConfig.from_env({"LLM_COMPACTION_KEEP_RECENT_EXCHANGES": "0"})
+
+    def test_rejects_non_positive_or_non_finite_timeout(self) -> None:
+        for value in ("0", "-1", "nan", "inf"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "finite and positive"):
+                    AppConfig.from_env({"LLM_TIMEOUT": value})
+
 
 if __name__ == "__main__":
     unittest.main()

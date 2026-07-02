@@ -26,7 +26,6 @@ class AppConfigTest(unittest.TestCase):
                 "LLM_COMPACTION_MODEL",
                 "LLM_COMPACTION_AUTO_MAX_TOKENS",
                 "PLAIN_AGENT_ENABLE_NETWORK",
-                "EXA_API_KEY",
             },
         )
 
@@ -41,8 +40,7 @@ class AppConfigTest(unittest.TestCase):
         self.assertEqual(config.compaction.keep_recent_exchanges, 2)
         self.assertIsNone(config.compaction.model)
         self.assertEqual(config.compaction.auto_max_tokens, 200_000)
-        self.assertFalse(config.network.enabled)
-        self.assertIsNone(config.network.exa_api_key)
+        self.assertTrue(config.network.enabled)
 
     def test_loads_openai_and_optional_settings(self) -> None:
         config = AppConfig.from_env(
@@ -56,7 +54,6 @@ class AppConfigTest(unittest.TestCase):
                 "LLM_COMPACTION_MODEL": "summary-model",
                 "LLM_COMPACTION_AUTO_MAX_TOKENS": "0",
                 "PLAIN_AGENT_ENABLE_NETWORK": "yes",
-                "EXA_API_KEY": "exa-secret",
             }
         )
 
@@ -69,7 +66,6 @@ class AppConfigTest(unittest.TestCase):
         self.assertEqual(config.compaction.model, "summary-model")
         self.assertIsNone(config.compaction.auto_max_tokens)
         self.assertTrue(config.network.enabled)
-        self.assertEqual(config.network.exa_api_key, "exa-secret")
 
     def test_uses_generic_llm_api_key_as_fallback(self) -> None:
         config = AppConfig.from_env(
@@ -87,14 +83,12 @@ class AppConfigTest(unittest.TestCase):
         config = AppConfig.from_env(
             {
                 "DEEPSEEK_API_KEY": "llm-secret",
-                "EXA_API_KEY": "search-secret",
             }
         )
 
         rendered = repr(config)
 
         self.assertNotIn("llm-secret", rendered)
-        self.assertNotIn("search-secret", rendered)
 
     def test_rejects_unknown_provider(self) -> None:
         with self.assertRaisesRegex(ValueError, "LLM_PROVIDER"):
@@ -103,6 +97,11 @@ class AppConfigTest(unittest.TestCase):
     def test_rejects_invalid_network_flag(self) -> None:
         with self.assertRaisesRegex(ValueError, "boolean environment settings"):
             AppConfig.from_env({"PLAIN_AGENT_ENABLE_NETWORK": "sometimes"})
+
+    def test_network_can_be_disabled(self) -> None:
+        config = AppConfig.from_env({"PLAIN_AGENT_ENABLE_NETWORK": "false"})
+
+        self.assertFalse(config.network.enabled)
 
     def test_rejects_negative_integer_setting(self) -> None:
         with self.assertRaisesRegex(ValueError, "non-negative"):

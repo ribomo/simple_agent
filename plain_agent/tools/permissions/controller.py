@@ -2,12 +2,14 @@
 
 from collections.abc import Callable
 
+from plain_agent.tools.permissions.network_permission import NetworkPermissionRequest
 from plain_agent.tools.permissions.request import (
     ApprovalDecision,
     CommandPermissionRequest,
 )
 
-ApprovalHandler = Callable[[CommandPermissionRequest], ApprovalDecision]
+PermissionRequest = CommandPermissionRequest | NetworkPermissionRequest
+ApprovalHandler = Callable[[PermissionRequest], ApprovalDecision]
 
 
 class ApprovalDeniedError(PermissionError):
@@ -24,7 +26,7 @@ class PermissionController:
         """Bind or unbind the callback that approves protected tool actions."""
         self.approval_handler = approval_handler
 
-    def require_approval(self, request: CommandPermissionRequest) -> None:
+    def require_approval(self, request: PermissionRequest) -> None:
         """Require approval before the caller continues its side effect."""
         if (
             self.approval_handler is None

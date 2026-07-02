@@ -258,9 +258,10 @@ wheels = [
 
 [[package]]
 name = "plain-agent"
-version = "0.1.6"
+version = "0.1.7"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "openai" },
     { name = "python-dotenv" },
     { name = "rich" },
@@ -269,6 +270,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "openai", specifier = "==2.43.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "rich", specifier = ">=15.0.0" },

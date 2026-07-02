@@ -9,11 +9,13 @@ from plain_agent.conversation_history import ContextSize
 from plain_agent.sandbox import CommandRequest, SandboxMode
 from plain_agent.streaming import TextDelta, ToolResult
 from plain_agent.tools.permissions.controller import PermissionController
+from plain_agent.tools.permissions.network_permission import NetworkPermissionRequest
 from plain_agent.tools.permissions.request import CommandPermissionRequest
 from plain_agent.ui.app import PlainAgentApp, parse_approval_answer
 from plain_agent.ui.rendering import (
     format_command_approval,
     format_context_size,
+    format_network_approval,
     format_tool_result,
 )
 from plain_agent.ui.transcript import AssistantResponse, TranscriptEntry
@@ -53,6 +55,21 @@ class TerminalRenderingTest(unittest.TestCase):
         self.assertNotIn("\x1b", rendered.plain)
         self.assertNotIn("\r", rendered.plain)
         self.assertIn(r"\x1b[2K\rspoof", rendered.plain)
+
+    def test_format_network_approval_shows_destination_and_escaped_target(self) -> None:
+        rendered = format_network_approval(
+            NetworkPermissionRequest(
+                tool="web_search",
+                destination="mcp.exa.ai",
+                target="query\x1b[2K\rspoof",
+            )
+        )
+
+        self.assertEqual(
+            rendered.plain,
+            "[approval required: network] web_search -> mcp.exa.ai\n"
+            r"[target] query\x1b[2K\rspoof",
+        )
 
     def test_format_tool_result_uses_status_text(self) -> None:
         rendered = format_tool_result(

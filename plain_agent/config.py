@@ -6,7 +6,6 @@ import math
 
 from plain_agent.environment import (
     ENV_DEEPSEEK_API_KEY,
-    ENV_EXA_API_KEY,
     ENV_LLM_API_KEY,
     ENV_LLM_BASE_URL,
     ENV_LLM_COMPACTION_AUTO_MAX_TOKENS,
@@ -51,7 +50,6 @@ class NetworkSettings:
     """Settings for optional network tools."""
 
     enabled: bool
-    exa_api_key: str | None = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -81,9 +79,8 @@ class AppConfig:
             network=NetworkSettings(
                 enabled=_bool_value(
                     env.get(ENV_PLAIN_AGENT_ENABLE_NETWORK),
-                    False,
+                    True,
                 ),
-                exa_api_key=env.get(ENV_EXA_API_KEY),
             ),
         )
 

@@ -34,6 +34,7 @@ def main() -> None:
         model=config.llm.model,
         compactor=compactor,
         auto_compact_max_tokens=config.compaction.auto_max_tokens,
+        enable_network=config.network.enabled,
     )
 
     PlainAgentApp(agent).run()

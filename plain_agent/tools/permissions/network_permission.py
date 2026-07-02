@@ -10,6 +10,7 @@ class NetworkPermissionRequest:
     """A validated network action that requires user approval."""
 
     tool: str
+    destination: str
     target: str
 
     @property

@@ -231,7 +231,15 @@ class ToolRegistryTest(unittest.TestCase):
 
         self.assertEqual(
             [definition["function"]["name"] for definition in definitions],
-            ["list_files", "read_file", "search_text", "write_file", "edit_file", "run_command"],
+            [
+                "list_files",
+                "read_file",
+                "search_text",
+                "write_file",
+                "edit_file",
+                "web_search",
+                "run_command",
+            ],
         )
         self.assertEqual(
             run_command_definition["parameters"]["required"],
@@ -241,6 +249,16 @@ class ToolRegistryTest(unittest.TestCase):
             run_command_definition["parameters"]["properties"]["mode"]["enum"],
             ["read-only", "workspace-write"],
         )
+
+    def test_registry_exposes_web_search_by_default_with_opt_out(self) -> None:
+        with_network = ToolRegistry(enable_commands=False)
+        without_network = ToolRegistry(
+            enable_commands=False,
+            enable_network=False,
+        )
+
+        self.assertFalse(without_network.has("web_search"))
+        self.assertTrue(with_network.has("web_search"))
 
     def test_run_command_runs_argv_in_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -5,6 +5,7 @@ from rich.text import Text
 from plain_agent.conversation_history import ContextSize, estimate_token_count
 from plain_agent.display import escape_display_text
 from plain_agent.streaming import AutoCompaction, ToolResult
+from plain_agent.tools.permissions.network_permission import NetworkPermissionRequest
 from plain_agent.tools.permissions.request import CommandPermissionRequest
 
 WELCOME_STYLE = "#7dd3c7"
@@ -56,6 +57,15 @@ def format_command_approval(request: CommandPermissionRequest) -> Text:
     return Text(
         f"[approval required: {command.mode.value}] {command.display}\n"
         f"[reason] {escape_display_text(request.justification)}",
+        style=APPROVAL_STYLE,
+    )
+
+
+def format_network_approval(request: NetworkPermissionRequest) -> Text:
+    return Text(
+        f"[approval required: network] {escape_display_text(request.tool)} "
+        f"-> {escape_display_text(request.destination)}\n"
+        f"[target] {request.display}",
         style=APPROVAL_STYLE,
     )
 

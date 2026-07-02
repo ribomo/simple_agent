@@ -31,6 +31,7 @@ class SimpleAgent:
         compactor: ConversationCompactor | None = None,
         auto_compact_max_tokens: int | None = None,
         permission_controller: PermissionController | None = None,
+        enable_network: bool = True,
     ) -> None:
         if max_turns < 1:
             raise ValueError("max_turns must be positive")
@@ -49,6 +50,7 @@ class SimpleAgent:
         self.tool_registry = ToolRegistry(
             workspace,
             permission_controller=self.permission_controller,
+            enable_network=enable_network,
         )
         self.startup_warnings = self.tool_registry.startup_warnings
         self.conversation_history = ConversationHistory(INITIAL_PROMPT)

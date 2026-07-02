@@ -11,6 +11,7 @@ from plain_agent.tools.read_file import ReadFileTool
 from plain_agent.tools.run_command import RunCommandTool
 from plain_agent.tools.search_text import SearchTextTool
 from plain_agent.tools.utils import error
+from plain_agent.tools.web_search import WebSearchTool
 from plain_agent.tools.write_file import WriteFileTool
 
 
@@ -24,6 +25,7 @@ class ToolRegistry:
         max_search_results: int = 20,
         enable_commands: bool = True,
         permission_controller: PermissionController | None = None,
+        enable_network: bool = True,
     ) -> None:
         self.root = Path(root).resolve()
         self.permission_controller = (
@@ -39,6 +41,8 @@ class ToolRegistry:
             EditFileTool(),
         ]
         self.startup_warnings: list[str] = []
+        if enable_network:
+            registered_tools.append(WebSearchTool(self.permission_controller))
         if enable_commands:
             discovery = discover_linux_sandbox()
             if discovery.warning is not None:

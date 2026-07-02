@@ -16,12 +16,15 @@ from textual.widgets import Input, Static
 from plain_agent.agent_loop import SimpleAgent
 from plain_agent.conversation_history import ContextSize
 from plain_agent.streaming import AutoCompaction, TextDelta, ToolResult
-from plain_agent.tools.permissions.request import ApprovalDecision, CommandPermissionRequest
+from plain_agent.tools.permissions.controller import PermissionRequest
+from plain_agent.tools.permissions.network_permission import NetworkPermissionRequest
+from plain_agent.tools.permissions.request import ApprovalDecision
 from plain_agent.ui.rendering import (
     USER_PROMPT_STYLE,
     format_auto_compaction,
     format_command_approval,
     format_context_size,
+    format_network_approval,
     format_tool_result,
     format_welcome,
     status_text,
@@ -54,7 +57,7 @@ class PromptInput(Input):
 
 
 class PendingApproval:
-    """A command approval request waiting for bottom-prompt input."""
+    """A tool approval request waiting for bottom-prompt input."""
 
     def __init__(self) -> None:
         self.done = threading.Event()
@@ -62,7 +65,7 @@ class PendingApproval:
 
 
 def parse_approval_answer(answer: str) -> bool | None:
-    """Parse command approval input."""
+    """Parse tool approval input."""
     normalized = answer.strip().lower()
     if normalized in {"y", "yes"}:
         return True
@@ -211,17 +214,25 @@ class PlainAgentApp(App[None]):
     def _start_worker(self, target: Callable[..., None], *args: object) -> None:
         threading.Thread(target=target, args=args, daemon=True).start()
 
-    def request_approval(self, request: CommandPermissionRequest) -> ApprovalDecision:
-        """Ask for command approval through the terminal prompt."""
+    def request_approval(self, request: PermissionRequest) -> ApprovalDecision:
+        """Ask for tool approval through the terminal prompt."""
         pending = PendingApproval()
 
         async def ask() -> None:
             await self.transcript.finish_assistant()
             self._pending_approval = pending
             self.prompt_input.value = ""
-            self.transcript.append(format_command_approval(request))
-            self.prompt_label.update("Approve command? [y/N] ")
-            self._set_status("Command approval required")
+            if isinstance(request, NetworkPermissionRequest):
+                approval = format_network_approval(request)
+                prompt = "Approve network request? [y/N] "
+                status = "Network approval required"
+            else:
+                approval = format_command_approval(request)
+                prompt = "Approve command? [y/N] "
+                status = "Command approval required"
+            self.transcript.append(approval)
+            self.prompt_label.update(prompt)
+            self._set_status(status)
             self.prompt_input.focus()
 
         try:

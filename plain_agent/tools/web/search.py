@@ -1,4 +1,4 @@
-"""Model-facing web-search tool."""
+"""Model-facing web search tool."""
 
 from pathlib import Path
 
@@ -9,7 +9,7 @@ from plain_agent.tools.permissions.controller import (
 )
 from plain_agent.tools.permissions.network_permission import NetworkPermissionRequest
 from plain_agent.tools.utils import error, ok
-from plain_agent.tools.web_search.exa_mcp import (
+from plain_agent.tools.web.providers.exa import (
     EXA_DESTINATION,
     ExaSearchClient,
     ExaSearchError,

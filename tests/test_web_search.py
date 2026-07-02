@@ -6,7 +6,11 @@ import httpx
 
 from plain_agent.tools.permissions.controller import PermissionController
 from plain_agent.tools.permissions.request import ApprovalDecision
-from plain_agent.tools.web_search import ExaSearchClient, WebSearchTool
+from plain_agent.tools.web import WebFetchTool, WebSearchTool
+from plain_agent.tools.web.providers import (
+    ExaFetchClient,
+    ExaSearchClient,
+)
 
 
 def permission_controller(decision: ApprovalDecision) -> PermissionController:
@@ -203,6 +207,135 @@ class WebSearchToolTest(unittest.TestCase):
         self.assertFalse(empty["ok"])
         self.assertFalse(oversized["ok"])
         self.assertEqual(requests, [])
+
+
+class ExaFetchClientTest(unittest.TestCase):
+    def test_fetch_sends_mcp_request_and_returns_content(self) -> None:
+        captured_requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured_requests.append(request)
+            return httpx.Response(200, json=mcp_payload("# Example\nContent"))
+
+        client = ExaFetchClient(transport=httpx.MockTransport(handler))
+
+        content = client.fetch("https://example.com/page")
+
+        request = captured_requests[0]
+        self.assertEqual(str(request.url), "https://mcp.exa.ai/mcp")
+        self.assertNotIn("x-api-key", request.headers)
+        self.assertEqual(
+            json.loads(request.content),
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "web_fetch_exa",
+                    "arguments": {
+                        "urls": ["https://example.com/page"],
+                        "maxCharacters": 12_000,
+                    },
+                },
+            },
+        )
+        self.assertEqual(content, "# Example\nContent")
+
+    def test_fetch_bounds_returned_content(self) -> None:
+        client = ExaFetchClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    json=mcp_payload("x" * 13_000),
+                )
+            )
+        )
+
+        self.assertEqual(len(client.fetch("https://example.com")), 12_000)
+
+    def test_fetch_reports_http_status_without_response_body(self) -> None:
+        client = ExaFetchClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(500, text="secret response body")
+            )
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "HTTP status 500") as raised:
+            client.fetch("https://example.com")
+
+        self.assertNotIn("secret response body", str(raised.exception))
+
+
+class WebFetchToolTest(unittest.TestCase):
+    def test_denial_does_not_send_request(self) -> None:
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            return httpx.Response(200, json=mcp_payload("result"))
+
+        tool = WebFetchTool(
+            permission_controller(ApprovalDecision.REJECT),
+            ExaFetchClient(transport=httpx.MockTransport(handler)),
+        )
+
+        result = json.loads(tool.run(Path.cwd(), {"url": "https://example.com"}))
+
+        self.assertFalse(result["ok"])
+        self.assertIn("not approved", result["error"])
+        self.assertEqual(calls, 0)
+
+    def test_approved_fetch_returns_tool_result_and_approval_target(self) -> None:
+        approval_requests = []
+
+        def approve(request):
+            approval_requests.append(request)
+            return ApprovalDecision.ALLOW_ONCE
+
+        client = ExaFetchClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json=mcp_payload("content"))
+            )
+        )
+        tool = WebFetchTool(PermissionController(approve), client)
+
+        result = json.loads(
+            tool.run(Path.cwd(), {"url": "  https://example.com/page  "})
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["url"], "https://example.com/page")
+        self.assertEqual(result["content"], "content")
+        self.assertEqual(approval_requests[0].tool, "web_fetch")
+        self.assertEqual(approval_requests[0].destination, "mcp.exa.ai")
+        self.assertEqual(approval_requests[0].target, "https://example.com/page")
+
+    def test_invalid_urls_are_rejected_before_approval(self) -> None:
+        approval_requests = []
+
+        def approve(request):
+            approval_requests.append(request)
+            return ApprovalDecision.ALLOW_ONCE
+
+        tool = WebFetchTool(PermissionController(approve))
+        invalid_urls = [
+            "",
+            "example.com",
+            "file:///etc/passwd",
+            "https://user:password@example.com",
+            "https://example.com/a b",
+            "https://[invalid",
+            "https://example.com:99999",
+            "https://example.com/" + "x" * 2_000,
+        ]
+
+        for url in invalid_urls:
+            with self.subTest(url=url):
+                result = json.loads(tool.run(Path.cwd(), {"url": url}))
+                self.assertFalse(result["ok"])
+
+        self.assertEqual(approval_requests, [])
 
 
 if __name__ == "__main__":

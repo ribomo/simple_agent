@@ -76,19 +76,20 @@ Context compaction runs automatically when the estimated conversation history re
 Set `LLM_COMPACTION_AUTO_MAX_TOKENS` to change that threshold, or set it to `0` to disable automatic compaction.
 You can also run `/compact` in the terminal to compact manually.
 
-### Web search
+### Web access
 
-The Exa-backed `web_search` tool is enabled by default and every query requires explicit approval
-before Plain Agent connects to `mcp.exa.ai`. Search results include links and bounded relevant
-excerpts. No Exa API key is required.
+The Exa-backed `web_search` and `web_fetch` tools are enabled by default. Every query or URL
+requires explicit approval before Plain Agent connects to `mcp.exa.ai`. Search returns links and
+bounded excerpts; fetch returns bounded Markdown content for one HTTP or HTTPS URL. No Exa API key
+is required.
 
-To disable web search:
+To disable both web tools:
 
 ```bash
 export PLAIN_AGENT_ENABLE_NETWORK="false"
 ```
 
-This setting controls only the built-in search tool. The `run_command` sandbox remains offline.
+This setting controls only the built-in web tools. The `run_command` sandbox remains offline.
 
 ## Run
 

@@ -152,12 +152,13 @@ class SimpleAgentTest(unittest.TestCase):
         self.assertEqual([item["role"] for item in agent.conversation_history], ["system", "user", "assistant"])
         self.assertEqual(agent.conversation_history[-1]["content"], "Hello there")
 
-    def test_exposes_web_search_by_default(self) -> None:
+    def test_exposes_web_tools_by_default(self) -> None:
         agent = SimpleAgent(llm_client=FakeLLMClient([]), model="test-model")
 
         self.assertTrue(agent.tool_registry.has("web_search"))
+        self.assertTrue(agent.tool_registry.has("web_fetch"))
 
-    def test_can_disable_web_search(self) -> None:
+    def test_can_disable_web_tools(self) -> None:
         agent = SimpleAgent(
             llm_client=FakeLLMClient([]),
             model="test-model",
@@ -165,6 +166,7 @@ class SimpleAgentTest(unittest.TestCase):
         )
 
         self.assertFalse(agent.tool_registry.has("web_search"))
+        self.assertFalse(agent.tool_registry.has("web_fetch"))
 
     def test_respond_stream_does_not_auto_compact_history(self) -> None:
         llm_client = FakeLLMClient([stream_response(["Hello"])])

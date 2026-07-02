@@ -238,6 +238,7 @@ class ToolRegistryTest(unittest.TestCase):
                 "write_file",
                 "edit_file",
                 "web_search",
+                "web_fetch",
                 "run_command",
             ],
         )
@@ -250,7 +251,7 @@ class ToolRegistryTest(unittest.TestCase):
             ["read-only", "workspace-write"],
         )
 
-    def test_registry_exposes_web_search_by_default_with_opt_out(self) -> None:
+    def test_registry_exposes_web_tools_by_default_with_opt_out(self) -> None:
         with_network = ToolRegistry(enable_commands=False)
         without_network = ToolRegistry(
             enable_commands=False,
@@ -258,7 +259,9 @@ class ToolRegistryTest(unittest.TestCase):
         )
 
         self.assertFalse(without_network.has("web_search"))
+        self.assertFalse(without_network.has("web_fetch"))
         self.assertTrue(with_network.has("web_search"))
+        self.assertTrue(with_network.has("web_fetch"))
 
     def test_run_command_runs_argv_in_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
